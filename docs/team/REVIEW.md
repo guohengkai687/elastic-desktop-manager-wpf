@@ -86,3 +86,27 @@
 **P1（应修复，建议随交付一并处理）：** 暂无其它 P1。
 
 **P2（建议，不阻断交付）：** 见标准轴 §2 P2-1 ~ P2-16，优先级最高的三条：REST 历史空态绑定失效（P2-1）、`common.delete` 漏词与硬编码中文（P2-2/3）、SQL cursor 不关闭（P2-4）。另建议交付前完成：清理 `$(MSBuildThisFileDirectory).packages` 残留目录与 `git init`（P2-15）。
+---
+
+## 5. 处置记录（修复后复验，2025-06 于同会话完成）
+
+| 编号 | 处置 | 证据 |
+| --- | --- | --- |
+| **P0-1** 按查询更新静默空操作 | 修复：新增 `Core/Es/EsQueryHelper.cs`（`BuildUpdateByQueryBody` 组装 query+script.lang=painless）；`SearchViewModel` 增加 `UpdateScript` 输入（搜索页构建器新增「更新脚本 (Painless)」行），无脚本时提示 `search.update.needScript` 并**禁止走更新流程**；delete 走 `ExtractQueryPart` | 单测 `EsQueryHelper: update body 含 script` / `无 script 时不带 script 字段` / `ExtractQueryPart 只保留 query` / `非法 DSL 回退 match_all` 全部通过；构建 0 警告 |
+| **P2-1** REST 历史空态绑定失效 | 修复：`RestHistoryViewModel` 增加 `HasItems => Items.Count>0`，`Reload()` 后通知；删除最后一条后空态提示恢复 | 绑定目标存在，删除路径调 `Reload()` |
+| **P2-2/3** i18n 硬编码中文 / `common.delete` 漏词 | 修复：新增 `validate.required`（zh/en）、`common.delete`、`search.script`、`search.update.needScript`；5 处 `…不能为空` 全部改走 `L("validate.required", label)` | 单测 `i18n: validate.required 格式化`（zh/en）；词典 key 补齐 |
+| **P2-4** SQL cursor 从不关闭 | 修复：新查询前关闭上一游标；`Prev` 弹出持有游标的页时关闭；`TryCloseCursor` 后台尽力而为 | 代码路径新增 |
+| **P2-5** CSV 无 BOM | 修复：`new UTF8Encoding(true)`（Excel 中文不乱码） | 代码核验 |
+| **P2-6** REST GET 携带 body 被丢弃 | 修复：`EsClient.ExecuteAsync` 任意方法均挂载请求体（与 Java `setJsonEntity` 对齐） | 单测 `请求: GET 携带请求体不被丢弃` 通过 |
+| **P2-7** 存储健壮性 | 修复：新增 `Core/Services/AtomicFile`（临时文件+移动原子写；损坏文件备份为 `.corrupt-<ts>` 后回退，不再静默覆盖丢失配置）；三个服务统一接入 | 单测 `损坏配置文件备份而非静默清空` / `原子写` 通过 |
+| **P2-8** 读正文超时翻译缺口 | 修复：正文读取与响应处理纳入超时翻译 try | 代码核验 |
+| **P2-9** 显示协议重复 | 修复：`ConfigProperty.DisplayServerUrl()` 剥离已含 scheme；`MainViewModel.ConnectionLabel` 与 `DisplayName` 改用它 | 单测 `BaseUrl: 含协议前缀的服务器地址展示不重复协议` 通过 |
+| **P2-10** SQL 超时未独立 | 说明：与源项目一致（Java 亦用同一设置项）；README 已注明设置项含义 | 文档 |
+| **P2-11** OpenDialog 默认值 | 说明：采用源项目 DB 迁移后的默认（openDialog=1）；README 交付说明已注明 | 文档 |
+| **P2-12** 健康轮询不随可见性暂停 | 修复：`HealthViewModel.Active` + 视图 Loaded/Unloaded 切换，不可见时停表 | 代码核验 |
+| **P2-13** 删除当前连接不断开 | 修复：`ConnectionsViewModel.Delete` 删除当前连接时联动 `EsSession.Disconnect()` + 通知 | 代码核验 |
+| **P2-14** async void Execute | 说明：轻量命令库取舍，异常汇入 DispatcherUnhandledException（弹窗不崩溃），维持现状 | 文档 |
+| **P2-15** 仓库卫生 | 修复：清除字面量 `$(MSBuildThisFileDirectory).packages` 残留目录；`nuget.config` 移除不可展开的 MSBuild 属性；`git init` + 首次提交 | `git log` 92d1646 |
+| **P2-16** 保留 API 标注 | 修复：EsClient 未接入 UI 的方法添加「保留 API」注释 | 代码核验 |
+
+复验基线：`dotnet build ElasticDesktopManager.sln` → **0 Warning 0 Error**；`dotnet run --project tests/ElasticDesktopManager.Tests -c Release` → **36/36 通过**（新增 9 项回归测试：P0-1 ×4、P2-6、P2-7 ×2、P2-9、i18n ×1）。

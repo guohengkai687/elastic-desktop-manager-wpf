@@ -17,7 +17,7 @@
 | 索引 | 列表（分页/搜索）、健康色点、详情/状态查看、刷新/Flush/清缓存/打开/关闭 |
 | REST API | 任意方法/路径/请求体执行、JSON 格式化、响应美化、历史记录（100 条） |
 | SQL 查询 | `/_sql` 执行、fetch_size 游标分页、表格/JSON 双视图、CSV 导出 |
-| 搜索 | 图形化条件构建器（must/should/must_not/filter × term/match/wildcard/prefix/range/exists）→ 生成 DSL，结果表格/JSON，支持按查询更新/删除 |
+| 搜索 | 图形化条件构建器（must/should/must_not/filter × term/match/wildcard/prefix/range/exists）→ 生成 DSL，结果表格/JSON，支持按查询更新（需填写 Painless 更新脚本）/按查询删除 |
 | 设置 | 语言（简中/English）、主题（浅色/深色/跟随系统）、请求超时、关闭行为 |
 | 关于 | 版本与项目信息 |
 
@@ -72,11 +72,12 @@ dotnet run --project src/ElasticDesktopManager
 ## 与 JavaFX 原版的差异（移植说明）
 
 - 存储：SQLite + Flyway → JSON 文件（等价语义：配置树/设置/命令历史限 100 条）。
-- ES 客户端：High Level REST Client → 自研 `HttpClient` 薄封装（REST 端点与源项目一致）。
+- ES 客户端：High Level REST Client → 自研 `HttpClient` 薄封装（REST 端点与源项目一致，并**修正了源项目索引 refresh/flush/清缓存三处 URL 漏斜杠 bug**）。
 - 主题：Atlantafx 主题包 → 手写浅/深色 ResourceDictionary。
-- 搜索构建器：源项目复杂树组件 → 布尔子句 × 条件行生成 DSL（核心功能等价）。
+- 搜索构建器：源项目复杂树组件 → 布尔子句 × 条件行生成 DSL（核心功能等价）；「按查询更新」需填写 Painless 更新脚本（源项目有脚本编辑表）。
 - 自动更新检测：未移植（不联网）。
 - 平台：原项目跨平台，本移植仅限 Windows（WPF 本质）。
+- 启动时打开连接对话框默认开启（源项目 DB 默认值 openDialog=1）；请求超时一个设置项同时作用于普通请求与 SQL（与源项目行为一致）。
 
 ## 免责声明
 
