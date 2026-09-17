@@ -295,5 +295,5 @@ XAML 里的英文只是被覆盖的占位（性质是"两处来源"，不是"界
 ### 未做（如实声明）
 
 - [ ] 真机复验（关于窗口的作者行文字与按钮跳转）需用户在 Windows 上做：**QA 第 37 条**。
-- [ ] 上游 Apache-2.0 的许可证副本是否随仓库分发（如加 `LICENSE-APACHE`）**未擅自添加** —— 属项目许可文书，需用户决定。
+- [x] **用户决定加** → 新增 `LICENSE-APACHE`（apache.org 官方全文，md5 校验一致）+ `NOTICE`（上游署名与"已修改"声明）；README「许可」小节改为 MIT / Apache-2.0 双许可表 + 使用提示
 - [ ] 归档审查记录 `docs/team/archive/REVIEW-v1-port.md` 里的 `com/lxwise/elastic/...` 是**上游源码路径**，属历史事实，保留不动。

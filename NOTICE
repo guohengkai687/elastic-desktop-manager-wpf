@@ -1,0 +1,30 @@
+Elastic Desktop Manager (WPF 版)
+Copyright (c) 2026 Hengkai.Guo
+
+本产品是以下开源项目的移植版（derivative work），其版权与署名声明如下：
+
+  elastic-desktop-manager
+  作者：lxwise
+  源码：https://github.com/lxwise/elastic-desktop-manager
+  许可：Apache License, Version 2.0（全文见本仓库 LICENSE-APACHE）
+
+本仓库自有代码（WPF 移植与新增功能）按 MIT 许可发布，全文见 LICENSE。
+
+移植过程中对上游项目所做的重大修改（Apache-2.0 第 4(b)/4(c) 条要求的"已修改"声明）：
+
+  - 编程语言与 UI 框架：Java + JavaFX → C# + WPF（.NET 8），整体重写
+  - 数据存储：SQLite + Flyway → JSON 文件（配置 / 设置 / 命令历史）
+  - ES 客户端：Elasticsearch High Level REST Client → 自研 HttpClient 薄封装
+  - 主题：Atlantafx 主题包 → 手写浅色/深色 ResourceDictionary（设计令牌体系）
+  - 搜索条件构建器：上游的复杂条件树组件 → "布尔子句 × 条件行"生成 DSL
+  - 运行平台：上游跨平台 → 本移植版仅 Windows（WPF 本身的限制）
+  - 未移植：自动更新检测（本版不联网检查更新）
+  - 修正上游缺陷：索引 refresh / flush / 清缓存三处 URL 漏斜杠
+  - 新增能力：SSL 与"跳过 SSL 验证"、ES 查询示例窗口、索引工具（Mapping/Settings 在线更新、
+    别名管理、字段 Top 值、Force Merge、Reindex 迁移）、快照五列表（仓库 / 快照 / 恢复 /
+    SLM / ILM）、搜索页服务端分页（from/size）与 SQL 游标分页（fetch_size）、
+    中英双语即时切换、浅色/深色主题
+
+逐项功能对照见 README「与 JavaFX 原版的差异（移植说明）」。
+
+本 NOTICE 中的署名信息仅供说明之用，不修改任何许可条款。

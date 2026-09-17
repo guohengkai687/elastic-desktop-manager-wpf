@@ -180,7 +180,17 @@ dotnet run --project src/ElasticDesktopManager
 
 ## 许可
 
-[MIT](LICENSE) © 2026 Hengkai.Guo
+本仓库是 [lxwise/elastic-desktop-manager](https://github.com/lxwise/elastic-desktop-manager)（Apache-2.0 许可）的
+WPF 移植版，因此采用**两个许可并存**的结构：
 
-本仓库是 [lxwise/elastic-desktop-manager](https://github.com/lxwise/elastic-desktop-manager)（Apache-2.0 许可）的 WPF 移植版，
-保留上游项目的版权与署名；移植与改造点见上文「与 JavaFX 原版的差异」。
+| 范围 | 许可 | 全文 |
+| --- | --- | --- |
+| 本仓库自有代码（WPF 移植与新增功能） | **MIT** © 2026 Hengkai.Guo | [`LICENSE`](LICENSE) |
+| 移植自上游 JavaFX 原版的部分 | **Apache License 2.0** | [`LICENSE-APACHE`](LICENSE-APACHE) |
+
+上游项目的版权与署名、以及移植时所做的重大修改，见 [`NOTICE`](NOTICE)；
+逐项功能对照见上文「与 JavaFX 原版的差异（移植说明）」。
+
+> **使用提示**（非法律意见）：MIT 与 Apache-2.0 相互兼容，但 Apache 部分要求**保留版权与署名声明**、
+> **随附许可证副本**并**注明修改**。若你分发本软件或其衍生版本，请把 `LICENSE`、`LICENSE-APACHE`、
+> `NOTICE` 三个文件一并保留。

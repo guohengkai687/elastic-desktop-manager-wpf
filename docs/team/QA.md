@@ -447,6 +447,7 @@ REST / SQL / 空态视图在 code-behind 里赋了本地化文案，却没订阅
 | 关于窗口 | `AboutWindow.xaml.cs` 新增 `RepoUrl` 常量 → `https://github.com/guohengkai687/elastic-desktop-manager-wpf`，`OnGithub` 改用它（不再有散落的 URL 字面量） |
 | 署名保留 | 上游是 **Apache-2.0**：`about.desc` 中英均补"移植自 lxwise 的 … （Apache-2.0）"；README 顶部与「许可」小节点明 lxwise 是**上游作者**、本仓库作者是 guohengkai —— 署名是许可要求，不随作者改名一起删 |
 | 新守卫 | 「`src/**/*.cs` 里的 GitHub 仓库链接必须指向本仓库」+ 1 条自检（只扫 `src/`，README/docs 的上游署名链接不在范围内） |
+| 许可文书（用户追加要求） | 新增 `LICENSE-APACHE`（Apache License 2.0 全文，取 apache.org 官方文本）+ `NOTICE`（上游署名 + 移植修改清单）；README「许可」小节从"MIT © …"改为 **MIT / Apache-2.0 双许可表** + 使用提示 |
 
 ### 本轮验证
 
@@ -460,6 +461,9 @@ REST / SQL / 空态视图在 code-behind 里赋了本地化文案，却没订阅
 - 新规则的自检覆盖 5 个方向：指向上游仓库 → 抓出；本仓库（含 `.git` 后缀）→ 放行；
   `advisories` 保留路径 → 放行；只到用户主页（无仓库名）→ 放行；
   把 `own` 换成别的值后同一 URL 必须报错（反证比较真的在生效，不是恒过）
+- 许可文书：`LICENSE-APACHE` 的 md5 = `3b83ef96387f14655fc854ddc3c6bd57`（**等于 apache.org 官方值**，
+  202 行 / 11358 字节；与上游仓库分发的 `LICENSE` 逐行对比只差一个前导空行，属同一份许可文本）；
+  `LICENSE` / `LICENSE-APACHE` / `NOTICE` 三个文件均在仓库根且被 README「许可」小节引用
 
 ### 追加到 Windows 人工核对清单
 
