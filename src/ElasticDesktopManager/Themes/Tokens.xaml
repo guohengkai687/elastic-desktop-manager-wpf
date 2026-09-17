@@ -6,24 +6,34 @@
       ============ 设计令牌：几何（与主题无关，StaticResource）============
       颜色令牌在 Dark.xaml / Light.xaml（DynamicResource，运行时切换）。
       这里只放不随主题变化的尺寸/圆角/字号/阴影，避免每次切主题重算布局。
+
+      ⚠️ 关键约定（踩过线上崩溃，勿改）：
+      令牌的声明类型必须与使用它的目标属性类型**精确一致**。
+        原因：WPF 的若干 TypeConverter 只接受字符串，**不接受数字**。
+        例如 RowDefinition.Height 是 GridLength，其 GridLengthConverter 只认 string；
+        若令牌声明为 sys:Double，运行期会抛 XamlParseException：
+          「"52"不是属性"Height"的有效值。」（编译期零错误、零警告）
+        同类目标还有 Thickness(Padding/Margin/BorderThickness) 与 CornerRadius。
+      做法：按语义选类型 —— 间距=Thickness、网格尺寸=GridLength、字号/控件高=Double。
+      防线：tests/binding-guard 的「令牌类型兼容性」规则会静态拦截不匹配（含可失败自检）。
     -->
 
-    <!-- 间距节奏（4 的倍数，保证视觉韵律一致） -->
-    <sys:Double x:Key="Space1">4</sys:Double>
-    <sys:Double x:Key="Space2">8</sys:Double>
-    <sys:Double x:Key="Space3">12</sys:Double>
-    <sys:Double x:Key="Space4">16</sys:Double>
-    <sys:Double x:Key="Space5">24</sys:Double>
-    <sys:Double x:Key="Space6">32</sys:Double>
+    <!-- 间距节奏（4 的倍数，保证视觉韵律一致）。语义是内/外边距，故为 Thickness。 -->
+    <Thickness x:Key="Space1">4</Thickness>
+    <Thickness x:Key="Space2">8</Thickness>
+    <Thickness x:Key="Space3">12</Thickness>
+    <Thickness x:Key="Space4">16</Thickness>
+    <Thickness x:Key="Space5">24</Thickness>
+    <Thickness x:Key="Space6">32</Thickness>
 
-    <!-- 圆角 -->
+    <!-- 圆角（CornerRadius 属类型，直接匹配 CornerRadius 属性） -->
     <CornerRadius x:Key="RadiusXs">3</CornerRadius>
     <CornerRadius x:Key="RadiusSm">5</CornerRadius>
     <CornerRadius x:Key="RadiusMd">8</CornerRadius>
     <CornerRadius x:Key="RadiusLg">12</CornerRadius>
     <CornerRadius x:Key="RadiusPill">999</CornerRadius>
 
-    <!-- 字号 -->
+    <!-- 字号（目标是 Control/TextBlock.FontSize，类型为 double） -->
     <sys:Double x:Key="FontXs">11</sys:Double>
     <sys:Double x:Key="FontSm">12</sys:Double>
     <sys:Double x:Key="FontMd">13</sys:Double>
@@ -31,12 +41,18 @@
     <sys:Double x:Key="FontXl">19</sys:Double>
     <sys:Double x:Key="FontXxl">26</sys:Double>
 
-    <!-- 行高 / 控件高度（统一节奏，避免各页面高低不一） -->
+    <!-- 控件高度（目标是 Control.MinHeight / FrameworkElement.Height，类型为 double） -->
     <sys:Double x:Key="ControlHeight">30</sys:Double>
     <sys:Double x:Key="ControlHeightSm">26</sys:Double>
-    <sys:Double x:Key="TitleBarHeight">52</sys:Double>
-    <sys:Double x:Key="StatusBarHeight">28</sys:Double>
-    <sys:Double x:Key="NavWidth">208</sys:Double>
+
+    <!--
+      网格轨道尺寸：必须声明为 GridLength。
+      RowDefinition.Height / ColumnDefinition.Width 是 GridLength（不是 double！），
+      这是本项目运行期崩溃的根因，切勿改回 sys:Double。
+    -->
+    <GridLength x:Key="TitleBarHeight">52</GridLength>
+    <GridLength x:Key="StatusBarHeight">28</GridLength>
+    <GridLength x:Key="NavWidth">208</GridLength>
 
     <!-- 等宽字体（JSON / DSL / 日志统一用） -->
     <FontFamily x:Key="MonoFont">Cascadia Mono, Consolas, Courier New, monospace</FontFamily>
@@ -49,7 +65,12 @@
     <DropShadowEffect x:Key="ShadowLg" BlurRadius="28" ShadowDepth="6" Direction="270"
                       Color="#000000" Opacity="0.32" />
 
-    <!-- 过渡动效时长（毫秒，用于 DoubleAnimation 复用） -->
+    <!--
+      过渡动效时长：**预留未启用**。
+      当前控件模板的 hover/focus/disabled 状态均为瞬时切换，没有引用这两个令牌。
+      原因：本机是 Linux，WPF 无法运行，动效这类"只能靠肉眼看"的改动无法验证，
+      故不在未验证的前提下引入动画。启用前请先在 Windows 上确认观感。
+    -->
     <Duration x:Key="AnimFast">0:0:0.12</Duration>
     <Duration x:Key="AnimBase">0:0:0.18</Duration>
 </ResourceDictionary>

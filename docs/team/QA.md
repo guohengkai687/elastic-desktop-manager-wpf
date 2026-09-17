@@ -42,6 +42,33 @@
 > 另有一处**测试断言自身写错**：曾断言 `_nodes/stats` 每节点 1 行，实际 2 行（`name` + 指标）。
 > 核对后确认**产品行为正确**（把节点名也作为一行展示有用），改的是断言而非代码。
 
+## 第 2 轮：交付后用户实测反馈
+
+用户在 Windows 上实运行时**启动即崩溃**（`System.Windows.Markup.XamlParseException`），
+由此暴露出一类此前**编译 + Core 单测 + 守卫全都覆盖不到**的缺陷。
+
+| # | 缺陷 | 严重度 | 说明与修法 |
+|---|---|---|---|
+| 7 | **启动即崩**：`MainWindow.xaml` 行 11，`"52"不是属性"Height"的有效值` | **致命（无法启动）** | 根因：`Tokens.xaml` 把 `TitleBarHeight`/`StatusBarHeight`/`NavWidth` 声明为 `sys:Double`，而 `RowDefinition.Height` / `ColumnDefinition.Width` 的类型是 `GridLength`，其 `GridLengthConverter` **只接受字符串、不接受数字**。修法：令牌按语义声明为**精确类型**（间距=`Thickness`、网格尺寸=`GridLength`、字号/控件高=`Double`），使用点不再需要任何类型转换 |
+| 8 | 同族**未爆发**缺陷：`CardStyle` 用 `sys:Double` 令牌设 `Padding`（目标 `Thickness`） | 高（一旦生效必崩） | 会随页面渲染立刻崩。随 #7 一并修复（`Space*` 改为 `Thickness`） |
+| 9 | 守卫**真实漏洞**：资源 key 规则只查 `{DynamicResource}`，**从未检查 `{StaticResource}`** | 高（守卫假绿） | `{StaticResource}` 缺 key 同样抛 `XamlParseException` 直接崩，却无规则覆盖。已补齐 `{StaticResource X}` 与 `<StaticResource ResourceKey="X"/>` 两种写法，并顺带拦截"资源引用被嵌在字符串中"（`Margin="0,{StaticResource Space2},0,0"` 会被 XAML 当字面量 → 运行期转换失败） |
+
+**新增守卫规则**：「设计令牌的声明类型与目标属性类型匹配」（内置属性→类型表，可解析 `Setter` 的 `TargetType`）。
+
+**负向验证（证明规则真能失败，不是假绿）**：
+
+1. 把 `TitleBarHeight` 改回 `sys:Double` → 守卫精准报出
+   `MainWindow.xaml: <RowDefinition Height="{StaticResource TitleBarHeight}"> → 令牌声明为 Double，该属性需要 GridLength`；还原后通过。
+2. 在真实视图里注入 `Style="{StaticResource CardStyleTypo}"` + `Padding="0,{StaticResource Space4},0,0"` → 两条都被报出；还原后 0 行差异。
+
+守卫 **8 → 10 项**（自检 3 → 5 组断言）。
+
+**另外三项静态审计**（确认无同类残留）：
+
+1. `Tokens`/`Common`/`Light`/`Dark` 四个字典在 `App.xaml` 的同一次合并中**无重复 key**（重复 key 会启动即抛）。
+2. 15 个 `Style` 的 `TargetType` 与实际使用元素**全部相符**（不符会在加载时抛异常）。
+3. 各样式 `Setter` 的属性逐条核对，均在对应 `TargetType` 上存在。
+
 ## Core 单测明细（99 项，分组）
 
 | 组 | 数量级 | 覆盖 |
@@ -60,6 +87,9 @@
 ## Windows 人工核对清单（本机无法自测，请复验）
 
 > 命令：`dotnet run --project src/ElasticDesktopManager`
+>
+> **⚠️ 第 2 轮修复后请优先确认：主窗口能正常打开**（此前会抛 `XamlParseException` 启动即崩）。
+> 若仍打不开，请把**完整异常文本**发我——`XamlParseException` 会给出文件名、行号与属性名，可一次定位。
 
 1. **深色/浅色主题**：点顶栏主题按钮切换，检查所有页面文字/表格/输入框**无不可见元素**（若某处"空白"，多半是主题缺 key）。
 2. **导航**：左侧 11 项应显示图标 + 文字；选中项有**左侧强调竖条** + 淡底 + 强调色文字；悬停有底色变化。

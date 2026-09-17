@@ -41,6 +41,11 @@
 
 > 注意：`App.xaml` 中资源字典的合并顺序必须是 **Tokens → Common → Light**。
 > `Common.xaml` 用 `StaticResource` 引用令牌，顺序反了会在**运行期**解析失败（编译期不报错）。
+>
+> ⚠️ 令牌的声明类型必须与目标属性**精确一致**：间距是 `Thickness`、`TitleBarHeight` 等网格尺寸是 `GridLength`、
+> 字号与控件高是 `Double`。**不要**为了整齐把它们统一写成 `sys:Double` —— WPF 的 `GridLengthConverter` /
+> `ThicknessConverter` 只接受字符串，类型不符会在**启动时**抛 `XamlParseException`（编译期 0 错误 0 警告）。
+> 守卫的「令牌类型匹配」规则会静态拦截。
 
 ## ES 查询示例（REST API 页）
 
@@ -110,7 +115,7 @@ elastic-desktop-manager-wpf/
 │   ├── Mvvm/        ObservableObject / RelayCommand / AsyncRelayCommand
 │   └── Services/    ThemeService / Ui / SystemTheme
 └── tests/ElasticDesktopManager.Tests/  net8.0 控制台断言测试（Linux 可直接运行）
-    tests/binding-guard/               XAML 绑定契约 + 资源 key + i18n 静态守卫（Linux 可跑）
+    tests/binding-guard/               XAML 绑定契约 + 资源 key + 令牌类型 + i18n 静态守卫（10 项，Linux 可跑）
 ```
 
 ## 构建与运行
@@ -124,9 +129,11 @@ dotnet build ElasticDesktopManager.sln
 # 运行单元测试（Core 逻辑，Linux 可执行）
 dotnet run --project tests/ElasticDesktopManager.Tests -c Release
 
-# XAML 绑定契约 + 资源 key + i18n 静态守卫
-# 覆盖：只读属性绑到默认 TwoWay 目标 / Dark·Light 主题 key 不对称 /
-#      硬编码颜色 / 引用了不存在的资源 key / 中英文词条数不等
+# XAML 绑定契约 + 资源 key + 令牌类型 + i18n 静态守卫（10 项，含可失败自检）
+# 覆盖：只读属性绑到默认 TwoWay 目标 / Dark·Light 主题 key 不对称 / 硬编码颜色 /
+#      引用了不存在的资源 key（DynamicResource + StaticResource）/ 资源引用嵌在字符串中 /
+#      设计令牌类型与目标属性不匹配（如 Double 用于 GridLength/Thickness，会启动即崩）/
+#      中英文词条数量不等
 dotnet run --project tests/binding-guard -c Release
 
 # 运行应用（Windows）

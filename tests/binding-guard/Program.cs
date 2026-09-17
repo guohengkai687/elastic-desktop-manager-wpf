@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using System.Xml.Linq;
 
 // ============================================================
 // binding-guard — XAML 绑定契约静态检查（Linux 可跑）
@@ -204,6 +205,39 @@ static List<string> FindHardcodedColors(string xaml, string label)
     return hits;
 }
 
+// XAML 文本 → 元素序列。解析失败时返回空并输出原因；
+// 调用方必须把 parseError 当失败上报，否则规则会因"文件没检查"而假绿。
+static List<XElement> SafeDescendants(string xaml, out string? parseError)
+{
+    parseError = null;
+    try { return XDocument.Parse(xaml).Descendants().ToList(); }
+    catch (Exception ex)
+    {
+        parseError = $"XAML 解析失败，规则未能检查该文件：{ex.Message}";
+        return new List<XElement>();
+    }
+}
+
+// 属性值是否为"单个合法的标记扩展"（允许嵌套，如 {Binding X, Converter={StaticResource C}}）。
+// 返回 false 表示值里混有字面量文本，此时 XAML 不会解析内嵌的 {StaticResource}。
+static bool IsSingleMarkupExtension(string value)
+{
+    string v = value.Trim();
+    if (!v.StartsWith("{", StringComparison.Ordinal)) return false;
+    if (!v.EndsWith("}", StringComparison.Ordinal)) return false;
+    int depth = 0;
+    for (int i = 0; i < v.Length; i++)
+    {
+        if (v[i] == '{') depth++;
+        else if (v[i] == '}')
+        {
+            depth--;
+            if (depth == 0) return i == v.Length - 1; // 最外层闭合必须落在末尾
+        }
+    }
+    return false;
+}
+
 // ---- 规则：Dark / Light 主题 key 必须完全一致 ----
 Check("主题：Dark 与 Light 的颜色 key 完全一致（缺一边 → 该主题下元素静默不可见）", () =>
 {
@@ -231,8 +265,13 @@ Check("XAML：不存在硬编码 #RRGGBB 颜色（应为 DynamicResource，保�
 
 // ---- 规则：所有被引用的资源 key 必须存在 ----
 // 运行期：XAML 的 DynamicResource 缺失 → 元素静默不可见；
+//         XAML 的 StaticResource 缺失 → 加载时抛 XamlParseException 直接崩溃；
 //         C# 的 FindResource 缺失 → 抛 ResourceReferenceKeyNotFoundException 直接崩溃。
-Check("资源：XAML/C# 引用的资源 key 均已定义", () =>
+// 注意：StaticResource 与 DynamicResource 都必须查。曾只查了 DynamicResource，
+//       于是 {StaticResource 拼错的 key} 这类崩溃没有任何规则能拦住（真实漏洞）。
+// 前置条件：所有资源都集中在 Themes/*.xaml 与 App.xaml，Views 不定义本地资源，
+//           因此"key 必须出现在全局定义集中"不会误报（已核对，Views 中无 ResourceDictionary）。
+Check("资源：XAML/C# 引用的资源 key 均已定义（含 StaticResource）", () =>
 {
     var defined = new HashSet<string>(StringComparer.Ordinal);
     foreach (var f in Directory.GetFiles(Path.Combine(repoRoot, "src", "ElasticDesktopManager", "Themes"), "*.xaml")
@@ -241,15 +280,47 @@ Check("资源：XAML/C# 引用的资源 key 均已定义", () =>
 
     var missing = new List<string>();
 
-    // XAML: {DynamicResource Key}
+    // XAML: {DynamicResource Key} / {StaticResource Key} / <StaticResource ResourceKey="Key" />
     foreach (var f in Directory.GetFiles(viewsDir, "*.xaml", SearchOption.AllDirectories)
                  .Concat(Directory.GetFiles(Path.Combine(repoRoot, "src", "ElasticDesktopManager", "Themes"), "*.xaml"))
                  .Concat(new[] { Path.Combine(repoRoot, "src", "ElasticDesktopManager", "MainWindow.xaml") }))
     {
-        foreach (Match m in Regex.Matches(File.ReadAllText(f), @"\{DynamicResource\s+([A-Za-z_]\w*)\s*\}"))
+        string rel = Path.GetRelativePath(repoRoot, f);
+        string text = File.ReadAllText(f);
+
+        // 只匹配 "{XxxResource 标识符}"，不会误吃 BasedOn="{StaticResource {x:Type Button}}" 这种类型引用
+        foreach (Match m in Regex.Matches(text, @"\{(Dynamic|Static)Resource\s+([A-Za-z_]\w*)\s*\}"))
+        {
+            if (!defined.Contains(m.Groups[2].Value))
+                missing.Add($"{rel}: {{{m.Groups[1].Value} {m.Groups[2].Value}}} 未定义");
+        }
+
+        foreach (Match m in Regex.Matches(text, @"<StaticResource\s+ResourceKey=""([^""]+)"""))
         {
             if (!defined.Contains(m.Groups[1].Value))
-                missing.Add($"{Path.GetRelativePath(repoRoot, f)}: {{DynamicResource {m.Groups[1].Value}}} 未定义");
+                missing.Add($"{rel}: <StaticResource ResourceKey=\"{m.Groups[1].Value}\" /> 未定义");
+        }
+
+        // 写法错误：资源引用被嵌在更长的字符串里（如 Margin="0,{StaticResource Space2},0,0"）。
+        // XAML 不解析内嵌的标记扩展，会整体当字面量文本 → 目标属性转换失败 → 运行期崩溃。
+        // 非均匀边距请单独定义 Thickness 令牌（如 <Thickness x:Key="Gap0_0_0_8">0,0,0,8</Thickness>）。
+        var elements = SafeDescendants(text, out string? parseError);
+        if (parseError is not null)
+        {
+            missing.Add($"{rel}: {parseError}");
+            continue;
+        }
+
+        foreach (var el in elements)
+        {
+            foreach (var attr in el.Attributes())
+            {
+                string v = attr.Value;
+                if (!v.Contains("{StaticResource", StringComparison.Ordinal)) continue;
+                if (v.TrimStart().StartsWith("{}", StringComparison.Ordinal)) continue; // 显式转义为字面量，尊重作者意图
+                if (IsSingleMarkupExtension(v)) continue;                              // 合法：单个标记扩展（可嵌套）
+                missing.Add($"{rel}: <{el.Name.LocalName} {attr.Name.LocalName}=\"{v}\"> 资源引用被嵌在字符串中 → XAML 视为字面量 → 运行期转换失败");
+            }
         }
     }
 
@@ -267,8 +338,216 @@ Check("资源：XAML/C# 引用的资源 key 均已定义", () =>
         throw new Exception($"发现 {missing.Count} 处未定义引用：\n    " + string.Join("\n    ", missing.Distinct()));
 });
 
-// ---- 守卫自检：确保上面三条规则真的能失败（假绿比没有守卫更危险）----
-Check("守卫自检：主题 key 差异 / 硬编码颜色 / 未定义 key 均能被识别", () =>
+// ============================================================
+// 规则：设计令牌的声明类型必须与目标属性类型精确匹配
+//
+// 背景（真实线上崩溃，非假设）：Tokens.xaml 曾把 TitleBarHeight 声明为 sys:Double，
+// 而 RowDefinition.Height 的类型是 GridLength，其 GridLengthConverter 只接受字符串，
+// 于是窗口加载即抛 XamlParseException：「"52"不是属性"Height"的有效值。」
+// 编译期 0 错误 0 警告，只有真机运行才炸。同类陷阱：
+//   sys:Double → Padding/Margin/BorderThickness(Thickness)、CornerRadius、Duration
+// 判定：令牌类型 == 目标属性类型；或令牌是 string（由目标属性自带的转换器处理，任意类型都安全）。
+// 保守原则：属性不在下表内 → 不检查（宁可漏报，不可误报；误报会让守卫被无视）。
+// ============================================================
+
+// 目标属性 → 期望的令牌类型；null 表示"未知，不检查"
+static string? ExpectedTokenType(string ownerType, string property)
+{
+    switch (ownerType + "." + property)
+    {
+        // 具体元素优先：网格轨道是 GridLength，而普通 Height/Width 是 double
+        case "RowDefinition.Height":
+        case "RowDefinition.MinHeight":
+        case "RowDefinition.MaxHeight":
+        case "ColumnDefinition.Width":
+        case "ColumnDefinition.MinWidth":
+        case "ColumnDefinition.MaxWidth":
+            return "GridLength";
+    }
+
+    switch (property)
+    {
+        case "Margin":
+        case "Padding":
+        case "BorderThickness":
+            return "Thickness";
+        case "CornerRadius":
+            return "CornerRadius";
+        case "FontSize":
+        case "Width":
+        case "Height":
+        case "MinWidth":
+        case "MinHeight":
+        case "MaxWidth":
+        case "MaxHeight":
+        case "Opacity":
+            return "Double";
+        case "FontFamily":
+            return "FontFamily";
+        case "Duration":
+            return "Duration";
+        case "Effect":
+            return "Effect";
+        default:
+            return null;
+    }
+}
+
+static bool TokenTypeUsableFor(string tokenType, string expectedType)
+{
+    if (tokenType == expectedType) return true;
+    if (tokenType == "String") return true; // 字符串走目标属性自身的 TypeConverter
+    if (expectedType == "Effect" && tokenType.EndsWith("Effect", StringComparison.Ordinal)) return true;
+    if (expectedType == "Brush" && tokenType.EndsWith("Brush", StringComparison.Ordinal)) return true;
+    return false;
+}
+
+// 解析 Setter 所属 Style/ControlTemplate 的 TargetType → 简单类型名
+static string TargetTypeOf(XElement el)
+{
+    var host = el.Ancestors().FirstOrDefault(a => a.Name.LocalName is "Style" or "ControlTemplate" or "DataTemplate");
+    string raw = ((string?)host?.Attribute("TargetType") ?? "*").Trim();
+    if (raw.StartsWith("{x:Type", StringComparison.Ordinal))
+        raw = raw.Trim('{', '}').Split(' ').Last().Trim();
+    if (raw.Contains(':')) raw = raw.Split(':').Last().Trim();
+    return raw.Length == 0 ? "*" : raw;
+}
+
+static List<string> FindTokenTypeMismatches(string xaml, string label, Dictionary<string, string> tokenTypes)
+{
+    var hits = new List<string>();
+    XDocument doc;
+    try { doc = XDocument.Parse(xaml); }
+    catch (Exception ex)
+    {
+        // 不能静默跳过：静默 = 规则失效 = 假绿
+        hits.Add($"{label}: XAML 解析失败，令牌类型规则未能检查该文件（{ex.Message}）");
+        return hits;
+    }
+
+    foreach (var el in doc.Descendants())
+    {
+        foreach (var attr in el.Attributes())
+        {
+            var m = Regex.Match(attr.Value.Trim(), @"^\{StaticResource\s+([A-Za-z_]\w*)\s*\}$");
+            if (!m.Success) continue;
+            string key = m.Groups[1].Value;
+            if (!tokenTypes.TryGetValue(key, out string? tokenType)) continue; // 非设计令牌（如 Style 资源）→ 不管
+
+            string prop = attr.Name.LocalName;
+            string owner = el.Name.LocalName;
+            if (owner == "Setter")
+            {
+                if (prop != "Value") continue;
+                string? p = (string?)el.Attribute("Property");
+                if (p is null) continue;
+                if (p.Contains('.')) { owner = p.Split('.')[0]; prop = p.Split('.').Last(); }
+                else { owner = TargetTypeOf(el); prop = p; }
+            }
+
+            string? expected = ExpectedTokenType(owner, prop);
+            if (expected is null) continue;
+
+            if (!TokenTypeUsableFor(tokenType, expected))
+                hits.Add($"{label}: <{owner} {prop}=\"{{StaticResource {key}}}\"> → 令牌 {key} 声明为 {tokenType}，该属性需要 {expected} → 运行期转换失败（XamlParseException）");
+        }
+    }
+    return hits;
+}
+
+static Dictionary<string, string> TokenTypeMap(string tokensPath)
+{
+    var map = new Dictionary<string, string>(StringComparer.Ordinal);
+    var xns = XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml");
+    foreach (var el in XDocument.Load(tokensPath).Descendants())
+    {
+        var key = (string?)el.Attribute(xns + "Key");
+        if (key is not null) map[key] = el.Name.LocalName;
+    }
+    return map;
+}
+
+// ---- 规则：令牌类型必须匹配（Double 用于 GridLength/Thickness 会崩）----
+Check("令牌：设计令牌的声明类型与目标属性类型匹配", () =>
+{
+    var tokenTypes = TokenTypeMap(Path.Combine(repoRoot, "src", "ElasticDesktopManager", "Themes", "Tokens.xaml"));
+    if (tokenTypes.Count == 0) throw new Exception("Tokens.xaml 未解析到任何令牌 —— 守卫失效");
+
+    var hits = new List<string>();
+    foreach (var f in Directory.GetFiles(viewsDir, "*.xaml", SearchOption.AllDirectories)
+                 .Concat(Directory.GetFiles(Path.Combine(repoRoot, "src", "ElasticDesktopManager", "Themes"), "*.xaml"))
+                 .Concat(new[]
+                 {
+                     Path.Combine(repoRoot, "src", "ElasticDesktopManager", "MainWindow.xaml"),
+                     Path.Combine(repoRoot, "src", "ElasticDesktopManager", "App.xaml"),
+                 }))
+    {
+        hits.AddRange(FindTokenTypeMismatches(File.ReadAllText(f), Path.GetRelativePath(repoRoot, f), tokenTypes));
+    }
+
+    if (hits.Count > 0)
+        throw new Exception($"发现 {hits.Count} 处令牌类型不匹配：\n    " + string.Join("\n    ", hits.Distinct()));
+});
+
+Check("守卫自检：令牌类型不匹配必须能被抓出（且不误报）", () =>
+{
+    var tokens = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["BadDouble"] = "Double",       // 真实崩溃的形态
+        ["GoodHeight"] = "GridLength",
+        ["StrToken"] = "String",
+        ["Space"] = "Thickness",
+    };
+
+    // 必须失败：Double → RowDefinition.Height（复现线上崩溃）
+    string badHeight = """<Grid><Grid.RowDefinitions><RowDefinition Height="{StaticResource BadDouble}" /></Grid.RowDefinitions></Grid>""";
+    if (FindTokenTypeMismatches(badHeight, "t", tokens).Count != 1)
+        throw new Exception("未能抓出 Double → RowDefinition.Height（假绿：守卫已失效）");
+
+    // 必须通过：GridLength → RowDefinition.Height（精确类型）
+    string okHeight = """<Grid><Grid.RowDefinitions><RowDefinition Height="{StaticResource GoodHeight}" /></Grid.RowDefinitions></Grid>""";
+    if (FindTokenTypeMismatches(okHeight, "t", tokens).Count != 0)
+        throw new Exception("误报：GridLength → RowDefinition.Height 应为合法");
+
+    // 必须通过：string 令牌由目标属性转换器处理
+    string strHeight = """<Grid><Grid.RowDefinitions><RowDefinition Height="{StaticResource StrToken}" /></Grid.RowDefinitions></Grid>""";
+    if (FindTokenTypeMismatches(strHeight, "t", tokens).Count != 0)
+        throw new Exception("误报：string 令牌应放行");
+
+    // 必须失败：Double → Boxing Thickness（第二形态）
+    if (FindTokenTypeMismatches("""<Border Padding="{StaticResource BadDouble}" />""", "t", tokens).Count != 1)
+        throw new Exception("未能抓出 Double → Padding(Thickness)");
+
+    // 必须通过：Thickness → Padding
+    if (FindTokenTypeMismatches("""<Border Padding="{StaticResource Space}" />""", "t", tokens).Count != 0)
+        throw new Exception("误报：Thickness → Padding 应为合法");
+
+    // 必须通过：非设计令牌（Style/模板资源）不受本规则约束
+    if (FindTokenTypeMismatches("""<Button Style="{StaticResource SomeStyle}" />""", "t", tokens).Count != 0)
+        throw new Exception("误报：非令牌资源不应被检查");
+
+    // 必须通过：Setter 解析 TargetType（Border.Padding = Thickness）
+    string setterOk = """<Style TargetType="Border"><Setter Property="Padding" Value="{StaticResource Space}" /></Style>""";
+    if (FindTokenTypeMismatches(setterOk, "t", tokens).Count != 0)
+        throw new Exception("误报：Setter 中 Thickness → Border.Padding 应为合法");
+
+    // 必须失败：Setter 中 Double → Border.Padding
+    string setterBad = """<Style TargetType="Border"><Setter Property="Padding" Value="{StaticResource BadDouble}" /></Style>""";
+    if (FindTokenTypeMismatches(setterBad, "t", tokens).Count != 1)
+        throw new Exception("未能抓出 Setter 中的 Double → Padding");
+
+    // 必须失败：Setter 中 Double → ColumnDefinition.Width（TargetType 解析路径）
+    string setterCol = """<Style TargetType="ColumnDefinition"><Setter Property="Width" Value="{StaticResource BadDouble}" /></Style>""";
+    if (FindTokenTypeMismatches(setterCol, "t", tokens).Count != 1)
+        throw new Exception("未能抓出 Setter 中的 Double → ColumnDefinition.Width");
+
+    // 必须失败：XAML 解析失败不能被静默吞掉（否则规则会假绿）
+    if (FindTokenTypeMismatches("<a><b></a>", "t", tokens).Count != 1)
+        throw new Exception("XAML 解析失败被静默跳过 —— 规则可能假绿");
+});
+
+// ---- 守卫自检：确保上面四条规则真的能失败（假绿比没有守卫更危险）----
+Check("守卫自检：主题 key 差异 / 硬编码颜色 / 未定义 key / 内嵌资源引用 均能被识别", () =>
 {
     // 主题 key 差异
     var a = ResourceKeys("""<SolidColorBrush x:Key="OnlyA" />""");
@@ -284,6 +563,24 @@ Check("守卫自检：主题 key 差异 / 硬编码颜色 / 未定义 key 均能
     // 未定义 key 识别
     var defined = new HashSet<string> { "SurfaceBrush" };
     if (defined.Contains("TextBrush")) throw new Exception("自检逻辑有误");
+
+    // StaticResource 缺 key 必须能被抓到（此前规则只查 DynamicResource，是真实漏洞：
+    // StaticResource 缺 key 会在加载时抛 XamlParseException 直接崩溃）
+    if (Regex.Matches("""<Border Background="{StaticResource Missing}" />""", @"\{(Dynamic|Static)Resource\s+([A-Za-z_]\w*)\s*\}").Count != 1)
+        throw new Exception("未匹配到 {StaticResource …} —— 资源规则已失效");
+    if (Regex.Matches("""<StaticResource ResourceKey="Missing" />""", @"<StaticResource\s+ResourceKey=""([^""]+)""").Count != 1)
+        throw new Exception("未匹配到 <StaticResource ResourceKey=… /> —— 资源规则已失效");
+    // 类型引用不应被当成 key（否则 BasedOn="{StaticResource {x:Type Button}}" 会误报）
+    if (Regex.Matches("""BasedOn="{StaticResource {x:Type Button}}" """, @"\{(Dynamic|Static)Resource\s+([A-Za-z_]\w*)\s*\}").Count != 0)
+        throw new Exception("误报：{x:Type …} 类型引用不应被当作资源 key");
+
+    // 内嵌资源引用（XAML 当字面量 → 运行期转换失败）必须能被识别
+    if (IsSingleMarkupExtension("0,{StaticResource Space2},0,0"))
+        throw new Exception("误判：内嵌资源不应算合法标记扩展");
+    if (IsSingleMarkupExtension("{StaticResource A} {StaticResource B}"))
+        throw new Exception("误判：两个标记扩展拼接不应算合法");
+    if (!IsSingleMarkupExtension("{Binding X, Converter={StaticResource C}}"))
+        throw new Exception("误判：嵌套标记扩展应算合法");
 
     // i18n 计数：单边缺失要被发现
     static HashSet<string> K(string block) =>

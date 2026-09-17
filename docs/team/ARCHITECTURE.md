@@ -77,6 +77,21 @@ Common 用 `StaticResource` 引用令牌，令牌字典必须先合并，否则�
 **阴影**：`ShadowSm/Md/Lg`（卡片 < 浮层 < 对话框）
 **等宽字体**：`MonoFont`（JSON/DSL 统一）
 
+**⚠️ 令牌的声明类型必须与目标属性类型精确一致（曾导致"启动即崩"，勿改成统一 Double）**
+
+| 令牌 | 声明类型 | 目标属性 | 类型写错的后果 |
+|---|---|---|---|
+| `Space1..6` | `Thickness` | `Padding` / `Margin` / `BorderThickness` | 运行期 `XamlParseException` |
+| `TitleBarHeight` / `StatusBarHeight` / `NavWidth` | `GridLength` | `RowDefinition.Height` / `ColumnDefinition.Width` | 同上（**已实际发生，见 QA.md 缺陷 7**） |
+| `FontXs..Xxl` / `ControlHeight(Sm)` | `sys:Double` | `FontSize` / `MinHeight` / `Height` | 类型恰好匹配 → 正确 |
+| `RadiusXs..Pill` | `CornerRadius` | `CornerRadius` | 类型恰好匹配 → 正确 |
+
+原因：WPF 的 `GridLengthConverter` / `ThicknessConverter` **只接受字符串，不接受数字**。
+把上述令牌统一写成 `sys:Double`（"看起来更整洁"）是错误做法：编译期 0 错误 0 警告，真机运行才炸，
+报错信息还是误导性的「`"52"`不是属性`"Height"`的有效值」——看起来像值错了，其实是类型错了。
+由 `tests/binding-guard` 的「令牌类型匹配」规则静态拦截（内置属性→类型表，并能解析 `Setter` 的 `TargetType`）。
+非均匀边距**不要**写 `Margin="0,{StaticResource Space2},0,0"`（XAML 会把整串当字面量），应另定义 `Thickness` 令牌。
+
 **色板分层**（两主题 key 完全一致，由守卫强制）：
 
 | 语义 | 用途 |
@@ -186,7 +201,7 @@ Common 用 `StaticResource` 引用令牌，令牌字典必须先合并，否则�
   Mapping/Settings 提取、Reindex/别名非法 JSON 统一抛 `EsException`。
 - 结果：**99 通过 / 0 失败**。
 
-### 静态守卫（`tests/binding-guard`，7+1 项）
+### 静态守卫（`tests/binding-guard`，10 项）
 | 规则 | 防的问题 |
 |---|---|
 | 只读属性 + 默认 TwoWay 目标 | `TextBox.Text` 等绑 `private set` → **运行期抛异常、编译零错误** |
@@ -194,8 +209,10 @@ Common 用 `StaticResource` 引用令牌，令牌字典必须先合并，否则�
 | zh/en 词条数量相等 | 重复 key 掩盖差异 |
 | Dark/Light 颜色 key 一致 | 某主题缺 key → 该主题下元素**静默不可见** |
 | XAML 无硬编码 `#RRGGBB` | 硬编码色导致切主题失效 |
-| 引用的资源 key 均已定义 | XAML `DynamicResource` 缺失→静默不可见；C# `FindResource` 缺失→**抛异常崩溃** |
-| 守卫自检（3 条） | **假绿**：规则失效却仍显示 PASS |
+| 引用的资源 key 均已定义 | `DynamicResource` 缺失→静默不可见；`StaticResource`/`FindResource` 缺失→**抛异常崩溃** |
+| **设计令牌类型与目标属性类型匹配** | `Double` 令牌用于 `GridLength`/`Thickness` 属性 → **启动即崩**（缺陷 7 的根因） |
+| 资源引用不得嵌在字符串中 | `Margin="0,{StaticResource S},0,0"` → XAML 当字面量 → 运行期转换失败 |
+| 守卫自检（2 条） | **假绿**：规则失效却仍显示 PASS |
 
 **关键设计：守卫必须"能失败"**。每条新规则都配自检喂违规样本；本轮还修掉了一个真实误报（见下）。
 
@@ -218,6 +235,8 @@ Common 用 `StaticResource` 引用令牌，令牌字典必须先合并，否则�
 | R5 | 折叠面板默认全展导致上千元素卡顿 | 默认折叠 + 记忆展开状态 + 命中筛选自动展开 |
 | R6 | i18n 漏逗号导致误导性编译错误 | ADR-5 的机械做法 + 数量相等守卫 |
 | R7 | 子代理不稳定（本轮架构师两次无产出） | 记录降级并由主代理串行承担；流程与门禁不变 |
+| R8 | **令牌类型与目标属性不匹配**：编译零错误、本机无法自测、真机启动即崩（**已发生**：`GridLength`） | 令牌按语义声明精确类型（ADR-2 表）+ 守卫「令牌类型匹配」规则 + 对真实文件做负向验证 |
+| R9 | 资源 key 规则曾只覆盖 `DynamicResource`，`StaticResource` 缺 key 无规则拦截（**守卫假绿**） | 已补齐 `{StaticResource}` 与 `<StaticResource ResourceKey=.../>`；新增规则必须先证明"能失败" |
 
 ## 未完成 / 后续批次（如实声明）
 
