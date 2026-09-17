@@ -77,6 +77,22 @@ public static class EsQueryHelper
         return first?["settings"] is JsonNode settings ? settings.ToJsonString() : json;
     }
 
+    /// <summary>
+    /// 给搜索 DSL 加上服务端分页参数 <c>from</c>/<c>size</c>（覆盖已有值）。
+    ///
+    /// ES 的 `_search` 默认只回 10 条，翻页必须由服务端完成 —— 客户端无法把
+    /// "10 条结果"翻成其余命中。传进来的 DSL 必须是 JSON 对象；解析不了时原样返回
+    /// （与本文件其它方法一致：宁可把原样交给 ES 报错，也不在这里抛）。
+    /// </summary>
+    public static string WithPaging(string dslJson, int from, int size)
+    {
+        var root = TryParse(dslJson);
+        if (root is null) return dslJson;
+        root["from"] = Math.Max(0, from);
+        root["size"] = Math.Max(0, size);
+        return root.ToJsonString();
+    }
+
     private static JsonObject? TryParse(string json)
     {
         try

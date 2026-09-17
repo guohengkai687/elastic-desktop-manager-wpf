@@ -145,11 +145,72 @@
                         <TextBlock x:Name="TabTableHeader" />
                     </TabItem.Header>
                     <Grid>
-                        <DataGrid x:Name="ResultGrid" ItemsSource="{Binding Rows}" IsReadOnly="True"
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <DataGrid x:Name="ResultGrid" Grid.Row="0" ItemsSource="{Binding Rows}" IsReadOnly="True"
                                   AutoGenerateColumns="False" />
-                        <TextBlock x:Name="NoDataHint" HorizontalAlignment="Center" VerticalAlignment="Center"
+                        <TextBlock x:Name="NoDataHint" Grid.Row="0" HorizontalAlignment="Center" VerticalAlignment="Center"
                                    FontSize="13" Foreground="{DynamicResource DimTextBrush}"
                                    Visibility="{Binding Rows.Count, Converter={StaticResource CountInverseToVisibility}}" />
+
+                        <!--
+                          服务端分页条：from = (页号-1) × 每页条数，由 VM 写进 DSL 发给 ES。
+                          客户端无法把"默认返回的 10 条"翻成其余命中，所以每次翻页都是一次新请求。
+                          行为对齐 JavaFX 原版 PagingControl（10/20/30/50/100 条每页 + 首页/上下页/末页/前往）。
+                        -->
+                        <Border Grid.Row="1" Margin="0,8,0,0" Padding="10,5"
+                                Background="{DynamicResource SurfaceBrush}"
+                                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                                CornerRadius="{DynamicResource ControlRadius}"
+                                Visibility="{Binding PagingVisible, Converter={StaticResource BoolToVisibility}}">
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                <TextBlock x:Name="TotalHitsLabel" VerticalAlignment="Center" FontSize="12"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"
+                                           Text="{Binding TotalHitsText, Mode=OneWay}" />
+                                <ComboBox x:Name="PageSizeBox" Width="112" Margin="14,0,0,0"
+                                          ItemsSource="{Binding PageSizeOptions}"
+                                          DisplayMemberPath="Label" SelectedValuePath="Value"
+                                          SelectedValue="{Binding PageSize}" />
+                                <TextBlock x:Name="PageInfoLabel" Margin="14,0,0,0" VerticalAlignment="Center"
+                                           FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
+                                           Text="{Binding PageInfoText, Mode=OneWay}" />
+                                <Button x:Name="FirstPageButton" Style="{StaticResource IconButtonStyle}"
+                                        Command="{Binding FirstPageCommand}">
+                                    <Path Style="{StaticResource IconPathSmallStyle}"
+                                          Data="{x:Static icons:AppIconGeometries.PageFirst}"
+                                          Stroke="{DynamicResource TextSecondaryBrush}" />
+                                </Button>
+                                <Button x:Name="PrevPageButton" Style="{StaticResource IconButtonStyle}"
+                                        Command="{Binding PrevPageCommand}">
+                                    <Path Style="{StaticResource IconPathSmallStyle}"
+                                          Data="{x:Static icons:AppIconGeometries.ChevronLeft}"
+                                          Stroke="{DynamicResource TextSecondaryBrush}" />
+                                </Button>
+                                <Button x:Name="NextPageButton" Style="{StaticResource IconButtonStyle}"
+                                        Command="{Binding NextPageCommand}">
+                                    <Path Style="{StaticResource IconPathSmallStyle}"
+                                          Data="{x:Static icons:AppIconGeometries.ChevronRight}"
+                                          Stroke="{DynamicResource TextSecondaryBrush}" />
+                                </Button>
+                                <Button x:Name="LastPageButton" Style="{StaticResource IconButtonStyle}"
+                                        Command="{Binding LastPageCommand}">
+                                    <Path Style="{StaticResource IconPathSmallStyle}"
+                                          Data="{x:Static icons:AppIconGeometries.PageLast}"
+                                          Stroke="{DynamicResource TextSecondaryBrush}" />
+                                </Button>
+                                <TextBlock x:Name="GoToLabel" Margin="14,0,6,0" VerticalAlignment="Center"
+                                           FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+                                <!-- 回车提交走 code-behind 的 KeyDown：InputBinding 依赖继承上下文取 DataContext，
+                                     本机无法验证它在 UserControl 模板里一定生效，而事件处理器是确定行为的。 -->
+                                <TextBox x:Name="GoToBox" Width="56" VerticalContentAlignment="Center"
+                                         KeyDown="OnGoToPageKeyDown"
+                                         Text="{Binding GoToPageText, UpdateSourceTrigger=PropertyChanged}" />
+                                <TextBlock x:Name="GoToSuffixText" Margin="6,0,0,0" VerticalAlignment="Center"
+                                           FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+                            </StackPanel>
+                        </Border>
                     </Grid>
                 </TabItem>
                 <TabItem>

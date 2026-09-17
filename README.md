@@ -18,7 +18,7 @@
 | 指标 | `_nodes/stats` 全量指标，按前缀分组可折叠、可按 key/值/节点筛选，字节与时长自动人性化 |
 | REST API | 任意方法/路径/请求体执行、JSON 格式化、响应美化、历史记录（100 条）、**ES 查询示例一键回填** |
 | SQL 查询 | `/_sql` 执行、fetch_size 游标分页、表格/JSON 双视图、CSV 导出 |
-| 搜索 | 索引下拉（可编辑：选具体索引，也能直接输入 `logs-*` 通配符/别名/多索引，并显示加载数量或失败原因）；图形化条件构建器（must/should/must_not/filter × term/match/wildcard/prefix/range/exists）→ 生成 DSL，结果表格/JSON，支持按查询更新（需填写 Painless 更新脚本）/按查询删除 |
+| 搜索 | 索引下拉（可编辑：选具体索引，也能直接输入 `logs-*` 通配符/别名/多索引，并显示加载数量或失败原因）；图形化条件构建器（must/should/must_not/filter × term/match/wildcard/prefix/range/exists）→ 生成 DSL，结果表格/JSON，**服务端分页**（10/20/30/50/100 条每页、首页/上下页/末页/跳页，行为对齐源项目 PagingControl），支持按查询更新（需填写 Painless 更新脚本）/按查询删除 |
 | 快照 | 五个列表：**仓库管理**（列出/新建/校验/删除）、**快照管理**（列出/创建/查看 JSON/删除）、**快照恢复**（可选索引 + 重命名正则 + 分片级恢复进度）、**自动策略 SLM**（列出/新建/立即执行/删除）、**生命周期 ILM**（列出/新建/删除）。创建与恢复用 `wait_for_completion=false` 不阻塞界面；SLM/ILM 属 x-pack 能力，集群不支持时错误只显示在对应页签内（不会弹模态框） |
 | 设置 | 语言（简中/English）、主题（浅色/深色/跟随系统）、请求超时、关闭行为 |
 | 关于 | 版本与项目信息 |
@@ -121,7 +121,7 @@ elastic-desktop-manager-wpf/
 │   ├── Mvvm/        ObservableObject / RelayCommand / AsyncRelayCommand
 │   └── Services/    ThemeService / Ui / SystemTheme
 └── tests/ElasticDesktopManager.Tests/  net8.0 控制台断言测试（Linux 可直接运行）
-    tests/binding-guard/               XAML 绑定契约 + 资源 key + 令牌类型 + 派生属性通知 + 控件模板契约 + i18n 静态守卫（21 项，Linux 可跑）
+    tests/binding-guard/               XAML 绑定契约 + 资源 key + 令牌类型 + 派生属性通知 + 控件模板契约 + i18n 静态守卫（23 项，Linux 可跑）
 ```
 
 ## 构建与运行
@@ -135,14 +135,15 @@ dotnet build ElasticDesktopManager.sln
 # 运行单元测试（Core 逻辑，Linux 可执行）
 dotnet run --project tests/ElasticDesktopManager.Tests -c Release
 
-# XAML 绑定契约 + 资源 key + 令牌类型 + 派生属性通知 + 控件模板契约 + i18n 静态守卫（21 项，含可失败自检）
+# XAML 绑定契约 + 资源 key + 令牌类型 + 派生属性通知 + 控件模板契约 + i18n 静态守卫（23 项，含可失败自检）
 # 覆盖：只读属性绑到默认 TwoWay 目标 / Dark·Light 主题 key 不对称 / 硬编码颜色 /
 #      引用了不存在的资源 key（DynamicResource + StaticResource）/ 资源引用嵌在字符串中 /
 #      设计令牌类型与目标属性不匹配（如 Double 用于 GridLength/Thickness，会启动即崩）/
 #      被 XAML 绑定的只读派生属性漏发 PropertyChanged（按钮会永久禁用）/ 资源字典字面量下标（切主题会拆掉样式）/
 #      自写控件模板漏掉契约部件或契约绑定（PART_EditableTextBox / ContentTemplateSelector）/
 #      DataGrid 列数与 code-behind 表头映射项数不一致（越界是静默跳过，只丢表头）/
-#      中英文词条数量不等或占位符不一致 / 代码里用到的 i18n key 不存在
+#      中英文词条数量不等或占位符不一致 / 代码里用到的 i18n key 不存在 /
+#      页面视图在 code-behind 里本地化却没订阅语言切换（切语言整页停在旧语言）
 dotnet run --project tests/binding-guard -c Release
 
 # 运行应用（Windows）

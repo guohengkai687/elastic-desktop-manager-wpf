@@ -35,6 +35,9 @@ public static class AppIconGeometries
     public static Geometry Restore { get; } = Parse(AppIcons.Restore);
     public static Geometry ChevronDown { get; } = Parse(AppIcons.ChevronDown);
     public static Geometry ChevronRight { get; } = Parse(AppIcons.ChevronRight);
+    public static Geometry ChevronLeft { get; } = Parse(AppIcons.ChevronLeft);
+    public static Geometry PageFirst { get; } = Parse(AppIcons.PageFirst);
+    public static Geometry PageLast { get; } = Parse(AppIcons.PageLast);
     public static Geometry Run { get; } = Parse(AppIcons.Run);
     public static Geometry Check { get; } = Parse(AppIcons.Check);
     public static Geometry Close { get; } = Parse(AppIcons.Close);

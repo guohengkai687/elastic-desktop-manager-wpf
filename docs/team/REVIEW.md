@@ -168,3 +168,49 @@
 已改为正向断言"格式化后的值必须出现"。教训：**负向验证通过 ≠ 断言有效**，
 "只能否定"的断言（不含某串/非空/不为 null）在字段缺失时往往恒真，必须补正向。
 （同批的其余 6 条负向验证均按预期精准报错。）
+
+---
+
+# 第 6 轮审查记录
+
+范围：搜索分页（用户反馈"总命中 2570 却只有 10 条"）的实现与自查。
+
+## 自查发现并修掉的问题
+
+| # | 问题 | 处置 |
+|---|---|---|
+| S1 | `PageSize` setter 直接改 `_pageNum` 字段却不发 `PageNum` 通知（INotifyPropertyChanged 不完整） | 改为在 `RaisePagingChanged()` 里统一补 `PageNum` 通知，`ClearResults` 同路径复用 |
+| S2 | 回车提交原用 `<TextBox.InputBindings><KeyBinding Command="{Binding …}"/>`：`InputBinding` 取 DataContext 依赖继承上下文，**本机跑不了 WPF 无法验证它一定生效**，失效时表现为"回车没反应"（鼠标用户不会察觉） | 改为 code-behind `KeyDown` 事件处理器：行为确定，且与本视图既有的 `OnRun`/`OnAddCondition` 风格一致 |
+| S3 | 连着翻页时两个请求在途，先发的后到会覆盖新结果（第 4 轮审查在快照页抓到过同类问题） | 引入请求代次号 `_searchGeneration`，过期响应直接丢弃 |
+| S4 | 结果集变小后页码越界 → 留下"第 5 / 2 页 + 空表" | 收敛到最后一页并重查一次（`_clampRetry` 保证最多一次，不会递归） |
+| S5 | `ClearResults` 只清表格，分页状态残留（清空后仍显示"第 3 / 8 页"，下次搜索还带着旧页码） | 一并复位 `_hasSearched`/`_totalHits`/`_pageNum`/`_gotoText` 并补通知 |
+| S6 | 取消勾选 `track_total_hits` 时 ES 返回 `{"value":10000,"relation":"gte"}`，界面显示成"正好 10000"且"下一页"被过早禁用 | 模型加 `TotalHitsIsLowerBound`，显示 `10000+`，`HasNext` 对下限形态按"可能还有"处理 |
+
+## 与源项目（JavaFX 原版）的有意差异
+
+已在 ADR-13 与 QA 第 6 轮写明四点：点搜索回到第 1 页、结果集变小自动收敛、`gte` 显示为下限、
+丢弃过期响应。四处都是"源项目的行为在这里会误导用户"，因此**刻意不一致**，并写进了 Windows 复验清单。
+
+## 本轮顺带发现的系统性问题（未修，已登记）
+
+在排查"SearchView 为什么不随语言切换"时发现：**所有缓存页面视图**都在 code-behind 里给控件赋
+本地化文案，但只有 SnapshotView（第 4 轮）和 SearchView（本轮）订阅了 `Localization.LanguageChanged`；
+`MainViewModel.OnLanguageChanged` 只刷新导航标题与状态栏，页面不会重新 `Loaded`
+→ 切语言后其余 8 个页面的 chrome 停在旧语言（中英混排）。
+
+- 本轮**只修 SearchView**：分页条文案就加在这个视图里，不修等于新功能一上线就是坏的语言行为。
+- 其余 8 个文件的修复**如实登记为未做**（TASKS 第 6 轮），不假装已解决。
+- 但**不允许它继续扩散**：新增守卫规则（页面视图本地化必须订阅）+ 只允许缩短的债务清单
+  （`KnownStalePageLocalizers`，修好一个必须删一条，否则守卫报错）。两条负向验证：
+  去掉 SearchView 的订阅 → 精准报出该文件；把清单里的 HealthView 修好却不删条目 → 守卫要求删条目。
+
+另发现 31 个 DataGrid 列头硬编码英文（NodesView 13 / ShardsView 8 / IndicesView 7 / RestHistoryWindow 3），
+同属 i18n 债务，已登记；不属本次"分页"范围，未动。
+
+## 明确无法在本机验证
+
+- 分页条的真机布局与交互（按钮置灰、下拉收起态文案、跳页输入框回车）——Linux 无 WPF，见 QA 第 25-29 条。
+- `from`/`size` 在真实集群上的行为（含 `relation=gte` 与 5000 上限触发 400 的边界）——本机无 ES，
+  只有手写 fixture 与官方源码核对。
+- 唯一能静态保证的是：分页数学（单测钉死）、DSL 注入形态（解析回读断言）、
+  以及"页面不随语言切换"这一缺陷类不再扩散（守卫）。

@@ -100,6 +100,15 @@ public static class AppIcons
     /// <summary>展示箭头（右）。</summary>
     public const string ChevronRight = "M9.8 6.9 L14.9 12 L9.8 17.1";
 
+    /// <summary>展示箭头（左）—— 分页"上一页"。</summary>
+    public const string ChevronLeft = "M14.2 6.9 L9.1 12 L14.2 17.1";
+
+    /// <summary>首页：两个左尖角（与 ChevronLeft 同风格、间距一致）。</summary>
+    public const string PageFirst = "M17.5 6.9 L12.4 12 L17.5 17.1 M11.3 6.9 L6.2 12 L11.3 17.1";
+
+    /// <summary>末页：两个右尖角。</summary>
+    public const string PageLast = "M6.5 6.9 L11.6 12 L6.5 17.1 M12.7 6.9 L17.8 12 L12.7 17.1";
+
     /// <summary>执行（播放）。</summary>
     public const string Run = "M8.8 6.2 L17.6 12 L8.8 17.8 Z";
 
@@ -137,6 +146,9 @@ public static class AppIcons
         (nameof(Restore), Restore),
         (nameof(ChevronDown), ChevronDown),
         (nameof(ChevronRight), ChevronRight),
+        (nameof(ChevronLeft), ChevronLeft),
+        (nameof(PageFirst), PageFirst),
+        (nameof(PageLast), PageLast),
         (nameof(Run), Run),
         (nameof(Check), Check),
         (nameof(Close), Close),

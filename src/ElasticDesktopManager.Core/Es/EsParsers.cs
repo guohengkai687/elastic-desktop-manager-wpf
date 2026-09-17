@@ -156,6 +156,10 @@ public static class EsParsers
                     JsonValueKind.Object => GetLong(total, "value"),
                     _ => 0,
                 };
+                // relation == "gte" 表示上面这个数字只是下限（关闭 track_total_hits 时 ES 会
+                // 返回 {"value":10000,"relation":"gte"}）——界面显示 "10000+" 而不是 "10000"。
+                result.TotalHitsIsLowerBound = total.ValueKind == JsonValueKind.Object
+                    && string.Equals(JsonHelper.GetString(total, "relation"), "gte", StringComparison.Ordinal);
             }
 
             if (hits.TryGetProperty("hits", out var hitArr) && hitArr.ValueKind == JsonValueKind.Array)

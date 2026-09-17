@@ -290,3 +290,76 @@ DataGrid 列对齐、以及两条规则的自保护（模板改名 / 找不到�
 23. **快照页表头**：五个页签的表头都应齐全（3/7/9/9/5 列全部有中文标题），没有空表头。
 24. **语言切换**：在设置页中↔英来回切，搜索页/快照页的标题、页签、按钮、表头、状态行应整体跟着切，
     不出现中英混排。
+
+---
+
+## 第 6 轮（搜索分页：总命中 2570 却只有 10 行）
+
+### 问题与根因
+
+用户反馈"总命中 2570，只显示 10 条，没有分页"。根因不是"UI 少了分页控件"，而是
+**分页从来没被实现**：`BuildDsl` 只写了 `query`/`track_total_hits`/`timeout`，
+没写 `from`/`size` → ES 用默认 `size=10` 返回。客户端手里的就是这 10 条，
+**本地翻页只能重复显示这 10 条**，必须把 `from`/`size` 交给服务端。
+
+对齐源项目：`ClusterSearchController.getQueryConditionsParms` 里
+`from = (pageNum-1) × pageSize`、`query.put("size", pageSize)`，
+配套 `PagingControl`（10/20/30/50/100 条每页 + 首页/上页/下页/末页/前往 N 页）。
+本实现按同一行为落地，见 ADR-13。
+
+### 实现清单
+
+| 层 | 改动 |
+|---|---|
+| Core | 新增 `SearchPaging`（`FromOf`/`TotalPages`/`ClampPage`/`ExceedsWindow`/`HasNext`，纯函数）；`EsQueryHelper.WithPaging` 把 `from`/`size` 注入 DSL（保留原有 query）；`EsSearchResult.TotalHitsIsLowerBound`（`hits.total.relation == "gte"`） |
+| VM | `PageSize`/`PageNum`/`TotalPages`/`PagingVisible`/`CanGoPrev`/`CanGoNext`/`TotalHitsText`/`PageInfoText`/`PageSizeOptions`；首/上/下/末/前往命令；请求代次号丢弃过期响应；结果集变小自动收敛页码；清空结果时复位分页 |
+| View | 结果表格下方分页条（共 N 条 · 每页条数下拉 · 第 x / y 页 · ⏮ ◀ ▶ ⏭ · 前往 [ ] 页，回车提交）；文案全部 code-behind 本地化 |
+| i18n | 新增 11 个词条（zh/en 严格对齐，守卫强制） |
+| 图标 | 新增 `ChevronLeft`/`PageFirst`/`PageLast`（登记进 `AppIcons.All`，单测强制） |
+
+### 本轮验证
+
+- 构建：**0 警告 0 错误**
+- Core 单测：**105/105**（新增 3 项：`relation=gte` 判定、分页数学、DSL 注入）
+- 静态守卫：**21 → 23/23**（新增「页面视图本地化必须订阅 `LanguageChanged`」规则 + 自检）
+
+**负向验证 8 条**（改坏生产代码 → 确认精准报错 → 还原 → 复跑全绿）：
+`FromOf` 少减 1（`第 2 页 from=10` 变 20）、`FromOf` 不夹负（负偏移会发给 ES）、
+`ExceedsWindow` 用 `>=`（边界页 501 被误判超限）、`WithPaging` 不注入（分页直接失效）、
+`relation=gte` 不解析（把下限说成精确值）、新图标漏登记、去掉 SearchView 的语言订阅、
+债务清单里的 HealthView 修好却没删条目。
+
+**新断言写法**：`WithPaging` 的用例用 `JsonDocument.Parse` 读回 `from`/`size` 并断言
+`"from"` 只出现一次（防止"重复追加"而不是"覆盖"这种实现）。
+
+### 本轮顺带发现的系统性问题（已登记，未修）
+
+排查"SearchView 为什么不随语言切换"时发现：**所有缓存页面视图**都在 code-behind 里
+给控件赋本地化文案（`TitleText.Text = Localization.L(...)`），但只有 SnapshotView（第 4 轮修）
+和 SearchView（本轮修）订阅了 `Localization.LanguageChanged`。
+`MainViewModel.OnLanguageChanged` 只刷新左侧导航标题与状态栏，页面不会重新 `Loaded`
+→ **切换语言后，其余 8 个页面（首页/节点/分片/索引/指标/REST/SQL/空态视图）的 chrome 会停在旧语言，
+而 VM 的动态文案已切新语言 → 中英混排**。
+
+处置：本轮**只修 SearchView**（分页条就加在这个视图里，不修等于新功能一上线就是坏的语言行为），
+其余 8 个文件的修复登记在 TASKS.md 第 6 轮"未做"，并用守卫规则 + **只允许缩短的债务清单**兜住
+（新增页面再犯会直接报错；修好一个必须删一条，否则守卫报错）。
+
+另外发现：`NodesView`/`ShardsView`/`IndicesView`/`RestHistoryWindow` 共 **31 个 DataGrid 列头是硬编码英文**
+（`Header="Name"` 这种，不走 i18n），切到英文界面看不出问题、中文界面会中英混排。
+同属 i18n 债务，已登记待批次处理（不属本次"分页"范围）。
+
+### 追加到 Windows 人工核对清单
+
+25. **搜索分页（本轮主功能）**：搜一个命中较多的索引（如 2570 条的 `record_*`），应看到
+    「共 2570 条 · 10 条/页 · 第 1 / 257 页」；点 ▶ 应变成第 2 页且**表格内容变化**（不是同一批数据）；
+    ⏭ 跳到末页、⏮ 回首⏮页；切到 `100 条/页` 应回到第 1 页并一次显示 100 行；
+    在「前往」框输入 `3` 回车应跳到第 3 页。
+26. **分页与条件联动**：翻到第 5 页后改条件重新点"搜索" → 应回到第 1 页（有意与源项目不同）；
+    在结果只有 12 条时停在第 2 页再缩小条件 → 应自动收敛到合法页码而不是"第 5 / 2 页 + 空表"。
+27. **超限提示**：把每页设成 10、直接"前往"一个很大的页号（如 9999）→ 应弹可读的中文错误
+    （提到起始偏移与 5000 上限），**不应**把 ES 的 `Result window is too large` 400 原文甩给用户。
+28. **命中数下限**：取消勾选「记录总命中数」再搜 → 总数应显示 `10000+`（而不是 `10000`），
+    且"下一页"仍可用。
+29. **语言切换（顺带）**：在设置里中↔英切换，**搜索页**（含新的分页条文案与每页条数下拉）应整体切换；
+    其余页面已知会停在旧语言 —— 这是下一个待修批次，见 TASKS.md。

@@ -1078,6 +1078,101 @@ Check("守卫自检：DataGrid 列数与表头映射不一致必须能被抓出"
         throw new Exception("模板列应计为 1 列（不能把 CellTemplate 里的子节点也算成列）");
 });
 
+// ---- 规则：页面视图在 code-behind 里赋本地化文案时，必须订阅 LanguageChanged ----
+//
+// 背景（第 4 轮修 SnapshotView、第 5 轮修 SearchView，同一个坑踩了两次）：
+// 页面被 MainViewModel.GetPage 缓存、只创建一次，从设置窗口切语言时不会重新 Loaded
+// （`MainViewModel.OnLanguageChanged` 只刷新左侧导航标题与状态栏），
+// 于是整页 chrome 停在旧语言、而 VM 的动态文案已切新语言 → 中英混排。
+//
+// 只对"缓存的页面视图"（XAML 根是 UserControl）要求订阅：弹窗每次都是新构造的，
+// 构造时取到的就是当前语言；给弹窗挂 LanguageChanged 反而会让 Localization 永久引用窗口。
+static bool RootIsUserControl(string xaml) => Regex.IsMatch(xaml, @"<UserControl\b");
+
+static bool LocalizesChromeInCodeBehind(string cs) =>
+    Regex.IsMatch(cs, @"(\.Text|\.Content|\.Header|\.ToolTip)\s*=\s*[^;]*Localization\.L\(");
+
+/// <summary>
+/// 已知"在 code-behind 里本地化但没订阅语言切换"的页面视图 —— 历史遗留，待统一修。
+/// 这是一份**只允许缩短**的债务清单：修好一个就删一条，否则下面的规则会报错。
+/// </summary>
+static string[] KnownStalePageLocalizers() => new[]
+{
+    "EmptyStateView.xaml.cs",
+    "HealthView.xaml.cs",
+    "IndicesView.xaml.cs",
+    "MetricsView.xaml.cs",
+    "NodesView.xaml.cs",
+    "RestView.xaml.cs",
+    "ShardsView.xaml.cs",
+    "SqlView.xaml.cs",
+};
+
+/// <summary>
+/// 判定一个视图：n/a=不适用（弹窗 / 没在 code-behind 里本地化）；
+/// subscribed=已订阅；allowed=在白名单里（历史遗留）；missing=该订阅却没订阅。
+/// </summary>
+static string PageLocalizerVerdict(string xaml, string cs, string fileName, string[] allowlist)
+{
+    if (!RootIsUserControl(xaml)) return "n/a";            // 弹窗：每次新构造，不要求
+    if (!LocalizesChromeInCodeBehind(cs)) return "n/a";    // 没有在 code-behind 里本地化
+    if (cs.Contains("LanguageChanged +=", StringComparison.Ordinal)) return "subscribed";
+    return allowlist.Contains(fileName, StringComparer.Ordinal) ? "allowed" : "missing";
+}
+
+Check("i18n：页面视图在 code-behind 里本地化时必须订阅 LanguageChanged（否则切语言停在旧语言）", () =>
+{
+    var allowlist = KnownStalePageLocalizers();
+    var missing = new List<string>();
+    var subscribed = new List<string>();
+    int pageLocalizers = 0;
+
+    foreach (var xaml in Directory.GetFiles(viewsDir, "*.xaml"))
+    {
+        string cs = xaml + ".cs";
+        if (!File.Exists(cs)) continue;
+        string name = Path.GetFileName(cs);
+        string verdict = PageLocalizerVerdict(File.ReadAllText(xaml), File.ReadAllText(cs), name, allowlist);
+        if (verdict == "n/a") continue;
+        pageLocalizers++;
+        if (verdict == "subscribed") subscribed.Add(name);
+        else if (verdict == "missing") missing.Add(name);
+    }
+
+    if (pageLocalizers == 0)
+        throw new Exception("没有扫描到任何在 code-behind 里本地化的页面视图 —— 规则失去保护对象，请更新规则");
+    if (missing.Count > 0)
+        throw new Exception("这些页面视图在 code-behind 里赋本地化文案，却没有订阅 Localization.LanguageChanged：\n    "
+            + string.Join("\n    ", missing)
+            + "\n  页面被 MainViewModel 缓存、切语言时不会重新 Loaded → 整页 chrome 会停在旧语言（中英混排）");
+
+    // 债务清单只能缩短：条目已经修好后必须删掉，否则清单会变成掩盖问题的橡皮擦
+    foreach (var fixedFile in subscribed)
+        if (allowlist.Contains(fixedFile, StringComparer.Ordinal))
+            throw new Exception($"{fixedFile} 已订阅 LanguageChanged，请把它从 KnownStalePageLocalizers 白名单里删除");
+});
+
+Check("守卫自检：页面视图漏订阅 LanguageChanged 必须能被抓出（弹窗不误报）", () =>
+{
+    var none = Array.Empty<string>();
+    const string uc = "<UserControl x:Class=\"X\">";
+    const string win = "<Window x:Class=\"X\">";
+    const string localizes = """TitleText.Text = Localization.L("nav.home");""";
+
+    if (PageLocalizerVerdict(uc, localizes, "X.xaml.cs", none) != "missing")
+        throw new Exception("未抓出未订阅语言切换的页面视图");
+    if (PageLocalizerVerdict(uc, "Localization.LanguageChanged += Localize;" + localizes, "X.xaml.cs", none) != "subscribed")
+        throw new Exception("未识别已订阅 LanguageChanged 的页面视图");
+    if (PageLocalizerVerdict(win, localizes, "X.xaml.cs", none) != "n/a")
+        throw new Exception("误报：弹窗（Window 根）不应被要求订阅");
+    if (PageLocalizerVerdict(uc, """Ui.Toast(Localization.L("common.ok"));""", "X.xaml.cs", none) != "n/a")
+        throw new Exception("误报：只调用 Ui.Toast 的视图不应被要求订阅");
+    if (PageLocalizerVerdict(uc, """DataGrid.Columns[0].Header = Localization.L(key);""", "X.xaml.cs", none) != "missing")
+        throw new Exception("未抓出给 DataGrid 表头赋本地化文案的写法");
+    if (PageLocalizerVerdict(uc, localizes, "X.xaml.cs", new[] { "X.xaml.cs" }) != "allowed")
+        throw new Exception("白名单未生效（名单内的历史遗留应放行）");
+});
+
 // ---- 规则：代码里用到的 i18n key 必须真的存在 ----
 //
 // 两遍扫描，各管一类漏法：

@@ -231,6 +231,91 @@ Test("解析: 搜索命中与聚合", () =>
     Eq("hello", r.Hits[0].Source["msg"], "source msg");
     Eq(1.5, r.Hits[0].Score, "score");
     True(r.Aggregations!.ContainsKey("t"), "aggregations");
+    False(r.TotalHitsIsLowerBound, "relation=eq → 精确计数");
+});
+
+Test("解析: hits.total.relation=gte 表示命中数只是下限", () =>
+{
+    // 关闭 track_total_hits 时 ES 返回 {"value":10000,"relation":"gte"}：
+    // 界面必须显示 "10000+"，否则把"至少 1 万"说成"正好 1 万"，分页也会过早禁用下一页。
+    var gte = EsParsers.ParseSearchResult(
+        """{"hits":{"total":{"value":10000,"relation":"gte"},"hits":[]}}""");
+    Eq(10000L, gte.TotalHits, "total");
+    True(gte.TotalHitsIsLowerBound, "relation=gte → 下限");
+
+    // ES 7 之前的扁平数字形态（无 relation）→ 视为精确值
+    var flat = EsParsers.ParseSearchResult("""{"hits":{"total":2570,"hits":[]}}""");
+    Eq(2570L, flat.TotalHits, "扁平 total");
+    False(flat.TotalHitsIsLowerBound, "扁平形态没有 relation → 精确值");
+
+    False(EsParsers.ParseSearchResult("""{"hits":{}}""").TotalHitsIsLowerBound, "没有 total → 不是下限");
+});
+
+Test("分页: from/size 数学（对齐原版 PagingControl 的行为与上限）", () =>
+{
+    // from = (页号-1) × 每页条数
+    Eq(0, SearchPaging.FromOf(1, 10), "第 1 页 from=0");
+    Eq(10, SearchPaging.FromOf(2, 10), "第 2 页 from=10");
+    Eq(2560, SearchPaging.FromOf(257, 10), "2570 条命中、每页 10 条 → 第 257 页 from=2560");
+    Eq(0, SearchPaging.FromOf(0, 10), "页号 < 1 收敛到 0");
+    Eq(0, SearchPaging.FromOf(-5, 10), "负页号收敛到 0");
+    Eq(0, SearchPaging.FromOf(3, 0), "每页 0 条不产生负偏移");
+    Eq(0, SearchPaging.FromOf(1, -10), "负每页条数不产生负偏移");
+
+    // 总页数（至少 1；整除与不整除）
+    Eq(1, SearchPaging.TotalPages(0, 10), "0 条 → 1 页（不显示 第 1/0 页）");
+    Eq(1, SearchPaging.TotalPages(10, 10), "正好一页");
+    Eq(2, SearchPaging.TotalPages(11, 10), "11 条 → 2 页");
+    Eq(257, SearchPaging.TotalPages(2570, 10), "2570 条 / 每页 10 → 257 页");
+    Eq(26, SearchPaging.TotalPages(2570, 100), "换每页 100 → 26 页");
+    Eq(1, SearchPaging.TotalPages(2570, 0), "每页 0 条 → 兜底 1 页（不除零）");
+
+    // 页码收敛
+    Eq(1, SearchPaging.ClampPage(0, 5), "小于 1 → 1");
+    Eq(5, SearchPaging.ClampPage(99, 5), "超过总页数 → 最后一页");
+    Eq(3, SearchPaging.ClampPage(3, 5), "合法页号不动");
+
+    // 结果窗口上限（ES index.max_result_window 默认 10000；取 5000，见 SearchPaging.MaxFrom 注释）
+    False(SearchPaging.ExceedsWindow(501, 10), "第 501 页 from=5000 恰好在上限内");
+    True(SearchPaging.ExceedsWindow(502, 10), "第 502 页 from=5010 超限");
+    False(SearchPaging.ExceedsWindow(51, 100), "每页 100 时第 51 页 from=5000 仍在上限内");
+
+    // 下一页判定
+    True(SearchPaging.HasNext(1, 10, 2570, false), "2570 条第 1 页还有下一页");
+    False(SearchPaging.HasNext(257, 10, 2570, false), "最后一页没有下一页");
+    False(SearchPaging.HasNext(1, 10, 0, false), "0 条没有下一页");
+    False(SearchPaging.HasNext(1, 10, 5, false), "只有 5 条（不足一页）没有下一页");
+    True(SearchPaging.HasNext(1, 10, 10000, true), "relation=gte 时按'可能还有'处理");
+    False(SearchPaging.HasNext(501, 10, 100000, true), "relation=gte 也不能越过结果窗口上限");
+});
+
+Test("分页: 搜索 DSL 注入 from/size（分页只能由服务端完成）", () =>
+{
+    string dsl = """{"query":{"match_all":{}},"track_total_hits":true,"timeout":"30s"}""";
+
+    string paged = EsQueryHelper.WithPaging(dsl, 20, 10);
+    using var doc = JsonDocument.Parse(paged);
+    var root = doc.RootElement;
+    Eq(20, root.GetProperty("from").GetInt32(), "from 写入");
+    Eq(10, root.GetProperty("size").GetInt32(), "size 写入");
+    // 原有查询必须原样保留（不能被分页覆盖掉）
+    True(root.GetProperty("query").TryGetProperty("match_all", out _), "query 保留");
+    True(root.GetProperty("track_total_hits").GetBoolean(), "track_total_hits 保留");
+
+    // 覆盖已有值（不是重复追加）
+    string twice = EsQueryHelper.WithPaging(paged, 0, 50);
+    using var doc2 = JsonDocument.Parse(twice);
+    Eq(0, doc2.RootElement.GetProperty("from").GetInt32(), "from 被覆盖");
+    Eq(50, doc2.RootElement.GetProperty("size").GetInt32(), "size 被覆盖");
+    Eq(1, System.Text.RegularExpressions.Regex.Matches(twice, "\"from\"").Count, "from 只出现一次");
+
+    // 负值兜底为 0（不能把负数发给 ES）
+    using var doc3 = JsonDocument.Parse(EsQueryHelper.WithPaging(dsl, -5, -1));
+    Eq(0, doc3.RootElement.GetProperty("from").GetInt32(), "负 from → 0");
+    Eq(0, doc3.RootElement.GetProperty("size").GetInt32(), "负 size → 0");
+
+    // 非法 JSON 原样返回（与本文件其它方法一致：交给 ES 报错，不在这里抛）
+    Eq("not json", EsQueryHelper.WithPaging("not json", 0, 10), "非法 JSON 原样返回");
 });
 
 // ------------------------------------------------------------

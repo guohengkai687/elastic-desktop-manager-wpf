@@ -207,3 +207,36 @@
 - [ ] 复审报告里"本机无法验证"的部分继续如实保留：自写 ComboBox 模板的编辑态/z-order/命中测试、ES 真实响应形状（本机无 ES，只有手写 fixture）。
 - [ ] 已接受的设计限制不变：解析时格式化的文本（保留/统计/分片）缓存在模型上，切语言后需下次刷新才更新（ADR-10 代价）。
 - [ ] ILM `start`/`stop`/`status`、SLM 调度器状态、非 fs 仓库的完整 settings 表单仍未接入。
+
+---
+
+## 第 6 轮（搜索分页）
+
+### 已完成
+
+- [x] **服务端分页**（用户反馈"总命中 2570 只显示 10 条"）：DSL 写入 `from=(页号-1)×每页条数` 与 `size`，
+      对齐源项目 `ClusterSearchController` + `PagingControl` 的行为
+- [x] Core 新增 `SearchPaging` 纯函数（`FromOf`/`TotalPages`/`ClampPage`/`ExceedsWindow`/`HasNext`）
+      + `EsQueryHelper.WithPaging`（注入并覆盖 from/size，保留原 query）+ `EsSearchResult.TotalHitsIsLowerBound`
+- [x] UI 分页条：共 N 条 · 每页条数下拉（10/20/30/50/100）· 第 x / y 页 · 首页/上页/下页/末页 · 前往 [ ] 页（回车提交）
+- [x] 结果窗口上限（`MaxFrom = 5000`，ES `index.max_result_window` 默认 10000）：超限**发请求前**给可读错误
+- [x] `hits.total.relation == "gte"` 显示为下限 `10000+`，且不因此过早禁用"下一页"
+- [x] 有意优于源项目的三点：点搜索回到第 1 页、结果集变小自动收敛页码并重查一次、请求代次号丢弃过期响应
+- [x] 新增 3 个图标（`ChevronLeft`/`PageFirst`/`PageLast`）并登记进 `AppIcons.All`
+- [x] i18n 新增 11 个词条（zh/en 对齐由守卫强制）
+- [x] 测试 102 → **105**（`relation=gte`、分页数学、DSL 注入），全部做负向验证
+- [x] 守卫 21 → **23 项**：新增「页面视图 code-behind 本地化必须订阅 `LanguageChanged`」+ 自检
+- [x] 顺带修复 **SearchView 不随语言切换**（分页条文案就在这个视图里，不修等于新功能一上线就是坏的）
+- [x] 文档更新（ARCHITECTURE ADR-13 + R19·R20 / QA 第 6 轮 + 核对清单 25-29 / README / 本文件）
+
+### 未做（如实声明）
+
+- [ ] **8 个缓存页面视图不随语言切换**（首页/节点/分片/索引/指标/REST/SQL/空态视图）：
+      它们在 code-behind 里赋本地化文案但没订阅 `Localization.LanguageChanged`，
+      `MainViewModel.OnLanguageChanged` 只刷新导航标题 → 切语言后 chrome 停在旧语言（中英混排）。
+      已由守卫规则 + 只允许缩短的债务清单（`KnownStalePageLocalizers`）兜住，**新增页面不会再犯**；
+      待一个批次统一修（每个文件：把 code-behind 本地化抽成方法 + 构造时订阅）。
+- [ ] **31 个 DataGrid 列头硬编码英文**（NodesView 13 / ShardsView 8 / IndicesView 7 / RestHistoryWindow 3），
+      不走 i18n → 中文界面中英混排。属独立 i18n 债务，待批次处理。
+- [ ] 真机复验仍需用户在 Windows 上完成：QA.md 第 15-19 条（第 4 轮）、20-24 条（第 5 轮）、**25-29 条（本轮）**。
+- [ ] 深分页（from 很大）的服务端开销是 ES 自身性质：本实现只做上限提示，未引入 PIT/`search_after` 游标翻页。

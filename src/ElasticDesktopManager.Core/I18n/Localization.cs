@@ -299,6 +299,19 @@ public static class Localization
         ["search.index.count"] = "{0} 个索引",
         ["search.index.empty"] = "该集群没有索引",
 
+        // 分页（服务端 from/size；对齐原版 PagingControl）
+        ["search.page.total"] = "共 {0} 条",
+        ["search.page.totalLower"] = "共 {0}+ 条（ES 未精确计数）",
+        ["search.page.sizeSuffix"] = "{0} 条/页",
+        ["search.page.info"] = "第 {0} / {1} 页",
+        ["search.page.first"] = "首页",
+        ["search.page.prev"] = "上一页",
+        ["search.page.next"] = "下一页",
+        ["search.page.last"] = "末页",
+        ["search.page.goto"] = "前往",
+        ["search.page.gotoSuffix"] = "页",
+        ["search.page.limit"] = "起始偏移 {0} 已超过上限 {1}（ES 的 index.max_result_window 默认 10000）。请缩小查询条件或增大每页条数。",
+
         // 设置
         ["setting.title"] = "设置",
         ["setting.language"] = "语言",
@@ -790,6 +803,19 @@ public static class Localization
         ["search.agg.note"] = "See the JSON tab for aggregation results",
         ["search.index.count"] = "{0} indices",
         ["search.index.empty"] = "No index in this cluster",
+
+        // Paging (server-side from/size; mirrors the original PagingControl)
+        ["search.page.total"] = "{0} hits",
+        ["search.page.totalLower"] = "{0}+ hits (ES stopped counting)",
+        ["search.page.sizeSuffix"] = "{0} / page",
+        ["search.page.info"] = "Page {0} / {1}",
+        ["search.page.first"] = "First page",
+        ["search.page.prev"] = "Previous page",
+        ["search.page.next"] = "Next page",
+        ["search.page.last"] = "Last page",
+        ["search.page.goto"] = "Go to",
+        ["search.page.gotoSuffix"] = "page",
+        ["search.page.limit"] = "Start offset {0} exceeds the limit {1} (ES index.max_result_window defaults to 10000). Narrow the query or increase the page size.",
 
         ["setting.title"] = "Settings",
         ["setting.language"] = "Language",

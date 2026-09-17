@@ -101,6 +101,14 @@ public class EsSearchHit
 public class EsSearchResult
 {
     public long TotalHits { get; set; }
+
+    /// <summary>
+    /// <c>hits.total.relation == "gte"</c>：<see cref="TotalHits"/> 只是**下限**。
+    /// 关闭 <c>track_total_hits</c> 时 ES 不再精确计数，返回 <c>{"value":10000,"relation":"gte"}</c>，
+    /// 界面必须显示成 "10000+"，否则会把"至少 1 万"说成"正好 1 万"，分页也会过早禁用下一页。
+    /// </summary>
+    public bool TotalHitsIsLowerBound { get; set; }
+
     public long Took { get; set; }
     public bool TimedOut { get; set; }
     public List<EsSearchHit> Hits { get; set; } = new();

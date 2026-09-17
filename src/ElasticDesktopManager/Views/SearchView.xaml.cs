@@ -33,6 +33,15 @@ public partial class SearchView : UserControl
             if (_vm is not null)
                 _vm.StructureChanged -= RebuildColumns;
         };
+        // 页面被 MainViewModel 缓存，从模态设置框切换语言时不会重新 Loaded，
+        // 所以必须显式订阅，否则整页 chrome 停在旧语言（视图与应用同生命周期，无需解绑）。
+        Localization.LanguageChanged += OnLanguageChanged;
+    }
+
+    private void OnLanguageChanged()
+    {
+        Localize();
+        _vm?.Relocalize();   // VM 拼装的文案（命中数/页码/每页条数下拉）也要跟着切
     }
 
     /// <summary>从索引页跳转带入预选索引；视图未加载完成时缓存到 Loaded 后应用。</summary>
@@ -64,6 +73,14 @@ public partial class SearchView : UserControl
         TabTableHeader.Text = Localization.L("search.tab.table");
         TabJsonHeader.Text = Localization.L("search.tab.json");
         NoDataHint.Text = Localization.L("search.noData");
+
+        // 分页条
+        GoToLabel.Text = Localization.L("search.page.goto");
+        GoToSuffixText.Text = Localization.L("search.page.gotoSuffix");
+        FirstPageButton.ToolTip = Localization.L("search.page.first");
+        PrevPageButton.ToolTip = Localization.L("search.page.prev");
+        NextPageButton.ToolTip = Localization.L("search.page.next");
+        LastPageButton.ToolTip = Localization.L("search.page.last");
     }
 
     private void RebuildColumns()
@@ -94,6 +111,14 @@ public partial class SearchView : UserControl
     private void OnAddCondition(object sender, RoutedEventArgs e)
     {
         if (_vm is not null) _vm.AddConditionCommand.Execute(null);
+    }
+
+    /// <summary>"前往 N 页"输入框回车提交（对齐原版：Enter 生效，非法输入由 VM 静默忽略）。</summary>
+    private async void OnGoToPageKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key != System.Windows.Input.Key.Enter || _vm is null) return;
+        e.Handled = true;
+        await _vm.GoToPageCommand.ExecuteAsync(null);
     }
 
     private async void OnUpdate(object sender, RoutedEventArgs e)
