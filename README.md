@@ -129,6 +129,10 @@ elastic-desktop-manager-wpf/
 要求：.NET SDK 8.0+（Windows 上直接 `dotnet` 即可；Linux 编译需要能从 nuget.org 还原 Windows 桌面包）。
 
 ```bash
+# 获取源码
+git clone https://github.com/guohengkai687/elastic-desktop-manager-wpf.git
+cd elastic-desktop-manager-wpf
+
 # 还原并构建（Linux 亦可）
 dotnet build ElasticDesktopManager.sln
 
@@ -170,3 +174,7 @@ dotnet run --project src/ElasticDesktopManager
 ## 免责声明
 
 本项目为开源个人工具，仅用于学习与研究；请勿用于任何非法用途。软件不采集、不上传任何用户数据。
+
+## 许可
+
+[MIT](LICENSE) © 2026 Hengkai.Guo
