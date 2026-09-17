@@ -1312,11 +1312,16 @@ Test("解析: SLM 策略（调度/仓库/保留/时间，兼容 7.x 对象与 8.
             "policy": { "schedule": "0 0 * * * ?", "repository": "backup2" },
             "next_execution": "2024-01-02T03:04:05.000Z",
             "last_success": "2024-01-01T00:00:00.000Z"
+          },
+          "isoTime": {
+            "policy": { "schedule": "0 0 * * * ?", "repository": "backup3" },
+            "last_failure": { "snapshot_name": "isoTime-1", "time_string": "2024-01-01T00:00:00.000Z",
+                              "reason": "boom" }
           }
         }
         """;
     var list = EsParsers.ParseSlmPolicies(json);
-    Eq(2, list.Count, "policy count");
+    Eq(3, list.Count, "policy count");
     Eq("daily", list[0].PolicyId, "按策略 ID 排序");
 
     var daily = list[0];
@@ -1341,37 +1346,85 @@ Test("解析: SLM 策略（调度/仓库/保留/时间，兼容 7.x 对象与 8.
     True(!string.IsNullOrEmpty(hourly.LastSuccess), "字符串形态的 last_success");
     Eq("", hourly.RetentionText, "没有 retention → 空串（不是 null）");
     Eq("", hourly.Indices, "没有 config → 空串");
+
+    // last_success/last_failure 对象里的伴随字段叫 time_string（不是 time_millis）：
+    // 缺 time 毫秒时必须回退到它，否则这一列会显示空白。
+    // 注意这里必须**正向**断言格式化后的值：只写 False(Contains("…T00:00:00")) 的话，
+    // 时间整个缺失时也会通过，等于没测（这个坑第一次就是这样踩到的）。
+    var isoTime = list[2];
+    Contains(isoTime.LastFailure, "isoTime-1", "失败快照名");
+    Contains(isoTime.LastFailure, "boom", "失败原因");
+    string expectedWhen = DateTimeOffset.Parse("2024-01-01T00:00:00.000Z",
+            System.Globalization.CultureInfo.InvariantCulture)
+        .ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
+    Contains(isoTime.LastFailure, expectedWhen, "time_string 必须被解析成本地时间并显示（伴随字段是 time_string）");
+    False(isoTime.LastFailure.Contains("T00:00:00"), "不得原样显示 ISO 串");
+    True(isoTime.HasFailure, "有 last_failure → HasFailure");
+    Eq("", isoTime.NextExecution, "没有 next_execution* → 空串（不是 null）");
     Eq(0, EsParsers.ParseSlmPolicies("{}").Count, "空对象");
 });
 
-Test("解析: ILM 生命周期策略（阶段链/使用中索引/修改时间）", () =>
+Test("解析: ILM 生命周期策略（阶段链顺序/使用中索引/修改时间）", () =>
 {
+    // fixture 用**真实响应形状**（照 ES 7.17 / 8.17 / main 的 LifecyclePolicyMetadata.toXContent，
+    // 三个版本逐字核对过）：
+    //   modified_date        是 epoch 毫秒（declareLong）
+    //   modified_date_string 才是 ISO 串
+    // 早先这里写成 "modified_date": "…ISO…" 的假形状，于是"把毫秒当 ISO 解析"的缺陷在
+    // True(!IsNullOrEmpty(...)) 这种断言下 102/102 全绿地存在 —— 新断言必须能抓出它。
+    // phases 的书写顺序也刻意打乱：ES 那边 phases 是 HashMap，返回顺序既不是生命周期顺序、也不稳定。
     const string json = """
         {
           "logs": {
             "version": 3,
-            "modified_date": "2024-01-02T03:04:05.000Z",
+            "modified_date": 1718452800000,
+            "modified_date_string": "2024-06-15T12:00:00.000Z",
             "policy": { "phases": {
+              "delete": { "min_age": "30d", "actions": { "delete": {} } },
               "hot": { "actions": {} },
-              "warm": { "actions": {} },
-              "delete": { "min_age": "30d", "actions": { "delete": {} } } } },
+              "warm": { "actions": {} } } },
             "in_use_by": { "indices": ["logs-0001", "logs-0002"], "data_streams": [], "composable_templates": [] }
+          },
+          "full": {
+            "version": 1,
+            "modified_date_string": "2024-06-15T12:00:00.000Z",
+            "policy": { "phases": {
+              "frozen": { "actions": {} }, "delete": { "actions": {} }, "cold": { "actions": {} },
+              "hot": { "actions": {} }, "warm": { "actions": {} }, "archive": { "actions": {} } } }
           },
           "empty": { "version": 1, "policy": { "phases": {} } }
         }
         """;
     var list = EsParsers.ParseIlmPolicies(json);
-    Eq(2, list.Count, "policy count");
+    Eq(3, list.Count, "policy count");
     Eq("empty", list[0].PolicyId, "按策略 ID 排序");
+    Eq("full", list[1].PolicyId, "按策略 ID 排序");
+    Eq("logs", list[2].PolicyId, "按策略 ID 排序");
 
-    var logs = list[1];
-    Eq("hot → warm → delete", logs.PhasesText, "阶段链（保持 ES 返回顺序）");
+    var logs = list[2];
+    // 阶段链必须按 ILM 执行顺序，而不是 ES 的返回顺序（fixture 里 delete 排在最前）
+    Eq("hot → warm → delete", logs.PhasesText, "阶段链按 hot/warm/cold/frozen/delete 排序");
+    // 未知阶段排在已知阶段之后，且仍保持 ES 的返回相对顺序
+    Eq("hot → warm → cold → frozen → delete → archive", list[1].PhasesText, "五个标准阶段 + 未知阶段殿后");
     Eq(2, logs.IndicesInUseCount, "使用中索引数");
     Eq("logs-0001, logs-0002", logs.IndicesInUse, "使用中索引拼接");
-    True(!string.IsNullOrEmpty(logs.ModifiedDate), "修改时间已格式化");
+
+    // 修改时间：既要"是本地时间格式"，也要"等于 modified_date 毫秒对应的那个瞬间"。
+    // 只断言非空抓不到"原样显示裸毫秒"，所以这里逐项钉死。
+    True(System.Text.RegularExpressions.Regex.IsMatch(logs.ModifiedDate, @"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$"),
+        $"修改时间应是 yyyy-MM-dd HH:mm:ss，实际 <{logs.ModifiedDate}>（裸毫秒 = 毫秒字段被当成 ISO 解析了）");
+    False(logs.ModifiedDate.Contains("1718452800000"), "不得显示原始 epoch 毫秒");
+    var when = DateTime.ParseExact(logs.ModifiedDate, "yyyy-MM-dd HH:mm:ss",
+        System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeLocal);
+    Eq(DateTimeOffset.FromUnixTimeMilliseconds(1718452800000).UtcDateTime, when.ToUniversalTime(),
+        "修改时间应对应 modified_date（毫秒）那一刻");
+    // 只有 ISO 伴随字段、没有毫秒时也要能显示
+    True(System.Text.RegularExpressions.Regex.IsMatch(list[1].ModifiedDate, @"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$"),
+        $"缺 modified_date 毫秒时应回退 modified_date_string，实际 <{list[1].ModifiedDate}>");
     Contains(logs.PolicyJson, "phases", "策略原文保留");
 
     Eq("", list[0].PhasesText, "空 phases → 空阶段链");
+    Eq("", list[0].ModifiedDate, "没有修改时间 → 空串（不是 null）");
     Eq(0, list[0].IndicesInUseCount, "没有 in_use_by → 0");
     Eq(0, EsParsers.ParseIlmPolicies("{}").Count, "空对象");
 });

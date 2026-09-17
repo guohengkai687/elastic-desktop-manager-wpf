@@ -199,9 +199,9 @@ Common 用 `StaticResource` 引用令牌，令牌字典必须先合并，否则�
 - **路径回归（AC3）**：`NoDoubleSlash()` 断言协议后不存在 `//` 与 `/?`。
 - **纯函数**：指标扁平化/格式化（11 项）、分词解析、模板解析、Top值解析、别名解析、
   Mapping/Settings 提取、Reindex/别名非法 JSON 统一抛 `EsException`。
-- 结果：**99 通过 / 0 失败**。
+- 结果：**102 通过 / 0 失败**。
 
-### 静态守卫（`tests/binding-guard`，18 项）
+### 静态守卫（`tests/binding-guard`，21 项，其中 6 条为守卫自检）
 | 规则 | 防的问题 |
 |---|---|
 | 只读属性 + 默认 TwoWay 目标 | `TextBox.Text` 等绑 `private set` → **运行期抛异常、编译零错误** |
@@ -215,10 +215,12 @@ Common 用 `StaticResource` 引用令牌，令牌字典必须先合并，否则�
 | **被 XAML 绑定的只读派生属性必须有 PropertyChanged 通知** | 漏通知 → 按钮永久禁用（第 3 轮的真实缺陷） |
 | **不得用字面量下标增删 MergedDictionaries** | 合并顺序一变就拆掉控件模板（第 3 轮"UI 变回旧样子"的根因） |
 | **可编辑 ComboBox 模板必须含 `PART_EditableTextBox`** | 模板缺部件 → WPF 进不了编辑态，下拉不可用（第 4 轮的真实缺陷） |
+| **ComboBox 收起态展示器必须绑定 `ContentTemplateSelector`** | `DisplayMemberPath` 是靠 `ItemTemplateSelector` 实现的 → 缺这一行时收起态显示数据对象的 `ToString`（第 5 轮用户截图发现的真实缺陷，见 ADR-11） |
+| **DataGrid 列数必须等于 code-behind 表头映射的项数** | 表头按下标赋值且越界静默跳过 → 多加/少加一列只丢一个表头，其它门禁全绿 |
 | **代码里用到的 i18n key 必须存在** | 漏词条 → 界面直接显示 `common.save` 这种 key（第 4 轮发现 2 处历史遗留） |
 | **zh/en 同一条词条的占位符必须一致** | 漏占位符 → 英文界面静默丢参数；多占位符 → `FormatException` 被吞后直接显示带 `{}` 的格式串 |
 | **每个 Window 根元素必须显式套用 `WindowBaseStyle`** | 新增窗口会静默退回系统白底（ADR-9 的护栏） |
-| 守卫自检（5 条） | **假绿**：规则失效却仍显示 PASS |
+| 守卫自检（6 条） | **假绿**：规则失效却仍显示 PASS |
 
 **关键设计：守卫必须"能失败"**。每条新规则都配自检喂违规样本；本轮还修掉了一个真实误报（见下）。
 
@@ -305,6 +307,56 @@ Common 用 `StaticResource` 引用令牌，令牌字典必须先合并，否则�
 
 ---
 
+## ADR-11：自定义 `ControlTemplate` 必须补齐官方模板的"契约属性绑定"
+
+**决策**：本项目的控件模板都是自己写的；凡是替换官方模板的地方，**官方模板里出现的
+`TemplateBinding` 一律不允许少**，尤其是那些"看起来与外观无关"的间接绑定。守卫逐条静态比对，
+当前强制两条：`PART_EditableTextBox`（编辑态契约）与 `ContentTemplateSelector`（`DisplayMemberPath` 契约）。
+
+**背景（真实缺陷，用户截图发现）**：搜索页"添加条件"的两个下拉选完值后显示的是
+`ClauseOption` / `OperatorOption`（被 90px/110px 列宽截断成 `ClauseOp` / `OperatorOp`），
+而**展开的列表是正常的**。根因链路很反直觉：
+
+1. `ItemsControl` 把 `DisplayMemberPath` 实现成"创建内部 `DisplayMemberTemplateSelector` 并装到
+   **`ItemTemplateSelector`** 上"（`ItemsControl.cs:390-417`），`ItemTemplate` 始终为 `null`；
+2. `ComboBox.UpdateSelectionBoxItem` 只做 `SelectionBoxItemTemplate = ItemTemplate`
+   （`ComboBox.cs:847-945`），**`ComboBox.cs` 里根本没有 `DisplayMemberPath` 这个属性**；
+3. 所以收起态能否显示成员值，完全取决于模板里的 `ContentPresenter` 有没有写
+   `ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"` —— 官方模板的每个变体都有
+   （`Themes/XAML/ComboBox.xaml:373-376` 等 6 处）。
+
+**后果面**：一行绑定缺失，影响全项目 **6 个** `DisplayMemberPath` 下拉（设置页语言、
+快照页仓库×2 与选择器、搜索页条件行×2），且只在收起态复现 —— 编译、单测、既有守卫全绿。
+
+**代价/纪律**：自写模板要对照官方模板逐属性核对，不能只按"看起来对不对"验收；
+守卫规则同时要求"必须能找到被保护的对象"，找不到就报错，避免规则空转通过。
+
+---
+
+## ADR-12：ES 响应字段的"同名不同型"必须以官方源码为准
+
+**决策**：解析 ES 响应时，`<name>` 与 `<name>_string` / `<name>_millis` 这类伴随字段的
+**类型与含义逐端点核对官方源码**，不做"同一字段名在别处是 ISO、这里也是 ISO"的类推。
+
+**背景（两处真实缺陷，独立复审 + 源码核对发现）**：
+
+- **ILM**：`LifecyclePolicyMetadata.modified_date` 是 `declareLong`（epoch 毫秒），ISO 串在同级的
+  `modified_date_string`（7.17 / 8.17 / main 三个版本逐字核对一致）。旧代码把 `modified_date` 当 ISO 解析，
+  `FormatIsoDate` 解析失败后原样返回 → "修改时间"列恒为 `1718452800000` 这种裸数字。
+- **SLM**：`SnapshotLifecyclePolicyMetadata` 用 `timestampFieldsFromUnixEpochMillis`，
+  所以 `modified_date` **是** ISO、`modified_date_millis` 是毫秒 —— 与 ILM 正好相反。
+
+**纪律**：这类缺陷旧测试抓不到（fixture 手写成 ISO 假形状 + 断言只写"非空"），
+所以 fixture 必须抄真实响应形状，断言必须**正向钉死格式化结果**（格式 + 数值对应关系），
+而不是"非空/不含某串"——后者在字段整个缺失时也会通过（第 5 轮亲自踩到一次）。
+
+**同类处理（枚举顺序）**：ILM 的 `phases` 是 `Collectors.toMap` 建的 `HashMap`
+（`LifecyclePolicy.java:58`），`toXContent` 按 `values()` 写出 → 返回顺序既不是生命周期顺序也不稳定。
+UI 用 `→` 呈现执行链，必须按 `TimeseriesLifecycleType.ORDERED_VALID_PHASES`
+（hot/warm/cold/frozen/delete）重排后再拼接。
+
+---
+
 ## 风险登记（按严重度）
 
 | # | 风险 | 缓解 |
@@ -324,6 +376,9 @@ Common 用 `StaticResource` 引用令牌，令牌字典必须先合并，否则�
 | R13 | **窗口用隐式样式**：`TargetType="Window"` 不作用于派生窗口 → 客户区停在系统白底（深色主题下刺眼；**已发生**） | ADR-9：`WindowBaseStyle` 显式引用；MainWindow 直写 `Background` |
 | R14 | **可编辑 ComboBox 缺模板部件**：`IsEditable="True"` 但模板无 `PART_EditableTextBox` → 下拉不可用（**已发生**） | 守卫「可编辑 ComboBox 模板」规则；唯一可编辑下拉单点覆盖 |
 | R15 | **i18n key 漏定义**：界面直接显示 `common.save` 这类 key（**已发生 2 处**） | 守卫「代码里的 key 必须存在」规则（调用点精确遍 + WPF 工程字面量宽松遍） |
+| R16 | **自写控件模板漏掉"契约属性绑定"**：`DisplayMemberPath` 下收起态显示数据对象 `ToString`（**已发生**，6 个下拉同时中招，展开列表却正常） | ADR-11：对照官方模板逐属性核对 + 守卫「收起态展示器必须绑 `ContentTemplateSelector`」规则（含"找不到模板就报错"的自保护） |
+| R17 | **同名不同型的 ES 时间/枚举字段**（ILM `modified_date` 是毫秒、SLM 的是 ISO；ILM `phases` 是 HashMap 顺序） | ADR-12：以官方源码为准 + fixture 抄真实形状 + 断言正向钉死格式化结果 |
+| R18 | **按下标赋值的表头静默错位**：`ApplyHeaders` 越界跳过 → 只丢一个表头 | 守卫「DataGrid 列数 ↔ 表头数组项数」规则（并纠正了文档里 9/8 的旧计数笔误） |
 
 ## 未完成 / 后续批次（如实声明）
 

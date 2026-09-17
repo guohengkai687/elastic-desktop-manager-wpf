@@ -176,3 +176,34 @@
 - [ ] 快照仓库类型下拉支持 s3/gcs/azure，但设置项只有 location/compress（其余需手写 JSON）。
 - [ ] 未能确认第 1、2 项修复在真机上的视觉/交互效果：Linux 无 WPF，需在 Windows 上复验 QA.md 第 15-19 条。
 - [ ] `_cat/nodes` 等 URL 里的 `node.role` 这类字段名不做本地化（ES 术语，见 ADR-10 边界）。
+
+---
+
+## 第 5 轮（用户截图缺陷 + 独立 Core/ES 复审）
+
+### 已完成
+
+- [x] **用户截图缺陷**：搜索页「添加条件」两个下拉收起态显示 `ClauseOption`/`OperatorOption`（被列宽截断成
+      `ClauseOp`/`OperatorOp`），展开列表却正常 → 自写 ComboBox 模板漏
+      `ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"`（`DisplayMemberPath` 实为 `ItemsControl`
+      装到 `ItemTemplateSelector` 上的内部选择器，`ComboBox.cs` 里根本没有这个属性）。
+      只改一行，**一并修好全项目 6 个 `DisplayMemberPath` 下拉**（设置页语言、快照页仓库×2、搜索页条件行×2）
+- [x] **ILM「修改时间」列恒为裸毫秒**（`1718452800000`）：`modified_date` 是 `declareLong`，ISO 在同级
+      `modified_date_string` → 改 `TimestampOf(el, "modified_date", "modified_date_string")`
+- [x] **ILM 阶段链顺序不可信**（`Collectors.toMap` 的 `HashMap` 顺序）→ 按 `ORDERED_VALID_PHASES` 稳定排序，
+      未知阶段殿后并保持 ES 相对顺序
+- [x] **SLM 成功/失败记录的时间伴随字段名读错**（`time_millis` → 真实字段 `time_string`）
+- [x] 测试改为**真实响应形状**：ILM fixture 用毫秒 + `_string` 伴随字段、phases 顺序打乱；
+      断言从"非空"改为**正向钉死格式化结果**（格式 + 数值对应瞬间）
+- [x] 守卫 18 → **21 项**：新增「ComboBox 收起态展示器必须绑 `ContentTemplateSelector`」、
+      「DataGrid 列数 ↔ 表头映射项数」，各配自检 + 真实文件负向验证 + **规则自保护**（找不到保护对象要报错，不许空转通过）
+- [x] 独立复审意见逐条回代码核实：**7 条成立、1 条不成立（上一轮已修，属重复）、10 条已在 `2690d50` 修掉**（详见 REVIEW.md）
+- [x] **纠正上一轮文档笔误**：快照页列数为 `3/7/9/9/5`（原写 `3/7/9/8/5`），改由守卫机械保证
+- [x] 文档更新（ARCHITECTURE ADR-11·ADR-12 + R16-R18 / QA 第 5 轮 + 核对清单 20-24 / REVIEW 第 5 轮 / 本文件）
+
+### 未做（如实声明）
+
+- [ ] 真机视觉复验仍需用户在 Windows 上完成：QA.md 第 15-19 条（第 4 轮）+ **20-24 条（本轮：下拉收起态、ILM 时间列/阶段顺序、表头齐全、语言切换）**。
+- [ ] 复审报告里"本机无法验证"的部分继续如实保留：自写 ComboBox 模板的编辑态/z-order/命中测试、ES 真实响应形状（本机无 ES，只有手写 fixture）。
+- [ ] 已接受的设计限制不变：解析时格式化的文本（保留/统计/分片）缓存在模型上，切语言后需下次刷新才更新（ADR-10 代价）。
+- [ ] ILM `start`/`stop`/`status`、SLM 调度器状态、非 fs 仓库的完整 settings 表单仍未接入。

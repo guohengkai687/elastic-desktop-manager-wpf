@@ -489,7 +489,9 @@ public static class EsParsers
         if (v.ValueKind != JsonValueKind.Object) return "";
 
         var parts = new List<string>();
-        string when = TimestampOf(v, "time", "time_millis");
+        // ES 的 SnapshotInvocationRecord 写的是 time（epoch 毫秒）+ time_string（ISO）
+        // —— 伴随字段叫 time_string，不是 time_millis。
+        string when = TimestampOf(v, "time", "time_string");
         if (!string.IsNullOrEmpty(when)) parts.Add(when);
         string snap = JsonHelper.GetString(v, "snapshot_name");
         if (!string.IsNullOrEmpty(snap)) parts.Add(snap);
@@ -542,6 +544,18 @@ public static class EsParsers
 
     // ================= ILM 生命周期策略 =================
 
+    /// <summary>
+    /// ILM 阶段的执行顺序（源自 <c>TimeseriesLifecycleType.ORDERED_VALID_PHASES</c>）。
+    /// 未识别的阶段排在已知阶段之后；因为排序是稳定的，多个未知阶段之间仍保持 ES 返回顺序。
+    /// </summary>
+    private static readonly string[] IlmPhaseOrder = { "hot", "warm", "cold", "frozen", "delete" };
+
+    private static int IlmPhaseRank(string phaseName)
+    {
+        int i = Array.IndexOf(IlmPhaseOrder, phaseName);
+        return i < 0 ? IlmPhaseOrder.Length : i;
+    }
+
     /// <summary>解析 GET /_ilm/policy：<c>{ "&lt;policyId&gt;": { "policy": { "phases": {...} }, "in_use_by": {...} } }</c></summary>
     public static List<EsIlmPolicy> ParseIlmPolicies(string json)
     {
@@ -557,7 +571,12 @@ public static class EsParsers
             var item = new EsIlmPolicy
             {
                 PolicyId = prop.Name,
-                ModifiedDate = FormatIsoDate(JsonHelper.GetString(el, "modified_date")),
+                // 真实形状（ES 7.17 / 8.17 / main 的 LifecyclePolicyMetadata 一致）：
+                //   modified_date        是 declareLong 的 **epoch 毫秒**，
+                //   modified_date_string 才是 ISO 串（getModifiedDateString()）。
+                // 早先这里只读 modified_date 并当 ISO 解析，解析失败原样返回 → 每行都显示
+                // "1718452800000" 这种裸数字（SLM 的 modified_date 才是 ISO，两边形状不同）。
+                ModifiedDate = TimestampOf(el, "modified_date", "modified_date_string"),
                 PolicyJson = JsonHelper.Pretty(el.GetRawText()),
             };
 
@@ -566,7 +585,14 @@ public static class EsParsers
             {
                 var names = new List<string>();
                 foreach (var ph in phases.EnumerateObject()) names.Add(ph.Name);
-                item.PhasesText = string.Join(" → ", names);
+                // 不能直接用 ES 返回的顺序：LifecyclePolicy 的 phases 是 Collectors.toMap 建的
+                // HashMap（`LifecyclePolicy.java:58`），toXContent 按 phases.values() 写出
+                // （`:202-205`），从集群状态反序列化走 readImmutableMap 时顺序甚至是随机的。
+                // 而 UI 用 "→" 把它呈现成执行链，必须按 ILM 的执行顺序重排，
+                // 否则会显示成 "warm → delete → hot" 这种误导性链路。
+                // 用 OrderBy（稳定排序）而不是 List.Sort：ILM 将来新增的阶段（排名相同）
+                // 会保持 ES 返回的先后关系，不会因为排序算法变得不可预期。
+                item.PhasesText = string.Join(" → ", names.OrderBy(IlmPhaseRank));
             }
 
             if (el.TryGetProperty("in_use_by", out var use) && use.ValueKind == JsonValueKind.Object &&

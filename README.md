@@ -121,7 +121,7 @@ elastic-desktop-manager-wpf/
 │   ├── Mvvm/        ObservableObject / RelayCommand / AsyncRelayCommand
 │   └── Services/    ThemeService / Ui / SystemTheme
 └── tests/ElasticDesktopManager.Tests/  net8.0 控制台断言测试（Linux 可直接运行）
-    tests/binding-guard/               XAML 绑定契约 + 资源 key + 令牌类型 + 派生属性通知 + i18n 静态守卫（18 项，Linux 可跑）
+    tests/binding-guard/               XAML 绑定契约 + 资源 key + 令牌类型 + 派生属性通知 + 控件模板契约 + i18n 静态守卫（21 项，Linux 可跑）
 ```
 
 ## 构建与运行
@@ -135,12 +135,14 @@ dotnet build ElasticDesktopManager.sln
 # 运行单元测试（Core 逻辑，Linux 可执行）
 dotnet run --project tests/ElasticDesktopManager.Tests -c Release
 
-# XAML 绑定契约 + 资源 key + 令牌类型 + 派生属性通知 + i18n 静态守卫（18 项，含可失败自检）
+# XAML 绑定契约 + 资源 key + 令牌类型 + 派生属性通知 + 控件模板契约 + i18n 静态守卫（21 项，含可失败自检）
 # 覆盖：只读属性绑到默认 TwoWay 目标 / Dark·Light 主题 key 不对称 / 硬编码颜色 /
 #      引用了不存在的资源 key（DynamicResource + StaticResource）/ 资源引用嵌在字符串中 /
-#      设计令牌类型与目标属性不匹配（如 Double 用于 GridLength/Thickness，会启动即崩）/ /
+#      设计令牌类型与目标属性不匹配（如 Double 用于 GridLength/Thickness，会启动即崩）/
 #      被 XAML 绑定的只读派生属性漏发 PropertyChanged（按钮会永久禁用）/ 资源字典字面量下标（切主题会拆掉样式）/
-#      中英文词条数量不等
+#      自写控件模板漏掉契约部件或契约绑定（PART_EditableTextBox / ContentTemplateSelector）/
+#      DataGrid 列数与 code-behind 表头映射项数不一致（越界是静默跳过，只丢表头）/
+#      中英文词条数量不等或占位符不一致 / 代码里用到的 i18n key 不存在
 dotnet run --project tests/binding-guard -c Release
 
 # 运行应用（Windows）

@@ -395,9 +395,22 @@
                             </ToggleButton.Template>
                         </ToggleButton>
 
+                        <!--
+                          ⚠️ 必须绑定 ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"：
+                          WPF 的 DisplayMemberPath **不是**通过 ItemTemplate 实现的，而是
+                          ItemsControl 在 OnDisplayMemberPathChanged 里把内部
+                          DisplayMemberTemplateSelector 装到 ItemTemplateSelector 上
+                          （ItemsControl.cs:390-417）；而 ComboBox.UpdateSelectionBoxItem 只把
+                          SelectionBoxItemTemplate = ItemTemplate 传出来（DisplayMemberPath 下它是 null），
+                          从不看 DisplayMemberPath（ComboBox.cs 里根本没有这个属性）。
+                          少了这一行，凡是用了 DisplayMemberPath 的下拉，收起态就会显示数据对象的
+                          ToString —— 即 "ClauseOption"/"EsRepository" 这类被列宽截断的原始类型名
+                          （设置页语言、快照页仓库、搜索页条件行的下拉全部中招）。
+                        -->
                         <ContentPresenter x:Name="content" IsHitTestVisible="False"
                                           Content="{TemplateBinding SelectionBoxItem}"
                                           ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                          ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
                                           ContentStringFormat="{TemplateBinding SelectionBoxItemStringFormat}"
                                           Margin="10,0,28,0" VerticalAlignment="Center"
                                           HorizontalAlignment="Left" />

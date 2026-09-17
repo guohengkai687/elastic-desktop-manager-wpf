@@ -240,3 +240,53 @@ ThemeService 旧代码：dicts.Add(next); dicts.RemoveAt(1); // 注释："索引
     **不应弹出模态错误框**，其它页签也不应受影响。
 19. **恢复进度**：提交恢复后应能在「快照恢复」页签看到分片级进度行（DONE 为绿色）；
     建议先用重命名正则（如 `index_(.+)` → `restored_$1`）做一次演练，避免与线上同名索引冲突。
+
+---
+
+## 第 5 轮（用户截图缺陷 + 独立 Core/ES 复审）
+
+### 本轮修的真实缺陷
+
+| # | 现象 | 根因（已对官方源码核对） | 修法 |
+|---|---|---|---|
+| 1 | 搜索页「添加条件」的两个下拉选完值后显示 `ClauseOption`/`OperatorOption`（被列宽截断成 `ClauseOp`/`OperatorOp`），**展开的列表却正常** | 自写 ComboBox 模板漏了 `ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"`。`DisplayMemberPath` 是 `ItemsControl` 用内部 `DisplayMemberTemplateSelector` 装到 **`ItemTemplateSelector`** 实现的（`ItemsControl.cs:390-417`），而 `ComboBox.UpdateSelectionBoxItem` 只传 `SelectionBoxItemTemplate = ItemTemplate`（DisplayMemberPath 下为 null），`ComboBox.cs` 里根本没有 `DisplayMemberPath`（`:847-945`） | `Themes/Common.xaml` 给收起态 `ContentPresenter` 补上该绑定（与官方 `Themes/XAML/ComboBox.xaml:373-376` 一致）。**一并修好全项目 6 个 `DisplayMemberPath` 下拉**：设置页语言、快照页仓库×2、搜索页条件行×2 |
+| 2 | ILM「修改时间」列恒为 `1718452800000` 这类裸毫秒 | `LifecyclePolicyMetadata.modified_date` 是 `declareLong`（毫秒），ISO 串在同级 `modified_date_string`；旧代码把 `modified_date` 当 ISO 解析，失败后原样返回 | 改走 `TimestampOf(el, "modified_date", "modified_date_string")`（毫秒优先、ISO 伴随字段回退） |
+| 3 | ILM「阶段」列可能显示成 `warm → delete → hot` 这种误导性链路 | `LifecyclePolicy.phases` 是 `Collectors.toMap` 建的 `HashMap`（`:58`），`toXContent` 按 `values()` 写出（`:202-205`），顺序既不是执行顺序也不稳定 | 按 `TimeseriesLifecycleType.ORDERED_VALID_PHASES`（hot/warm/cold/frozen/delete）稳定排序；未知阶段殿后并保持 ES 相对顺序 |
+| 4 | （潜在，未在真机观察到）SLM 失败记录的伴随字段读错名 | `SnapshotInvocationRecord` 写的是 `time`（毫秒）+ **`time_string`**，代码里读的是不存在的 `time_millis`，回退分支永远取不到值 → 该列在缺 `time` 时空白 | 改为 `time_string` |
+
+### 本轮新增守卫规则（18 → 21 项）
+
+| 新规则 | 防的问题 | 负向验证（真实文件） |
+|---|---|---|
+| ComboBox 收起态展示器必须绑 `ContentTemplateSelector` | 见上表 #1（收起态显示 `ToString`，展开态正常） | 删掉那一行 → 守卫报出该规则；改成 `ItemTemplate` 也报；把 `ControlTemplate` 的 `TargetType` 改名 → 报"失去保护对象"（**不允许空转通过**）；还原后通过 |
+| DataGrid 列数必须等于表头映射项数 | `ApplyHeaders` 越界静默跳过 → 多加/少加一列只丢一个表头 | IlmGrid 多加一列 → 报 `9 列 vs 5 项`；RepoHeaders 少一项 → 报 `3 列 vs 2 项`；`IlmHeaders` 改名 → 报"找不到映射"；还原后通过 |
+| 守卫自检（新增 2 条：收起态展示器、DataGrid 对齐） | 假绿 | 每条规则喂正/反/换写法/子模板/空对象等样本，逐一验证判定方向 |
+
+### 本轮验证
+
+- 构建：**0 警告 0 错误**
+- Core 单测：**102/102**（ILM/SLM 用例重写为真实响应形状：毫秒 + `_string` 伴随字段、打乱的 phases 顺序）
+- 静态守卫：**21/21**
+
+**新断言都做了负向验证**（改坏生产代码 → 确认精准报错 → 还原 → 复跑全绿）：
+ILM 毫秒回退、ILM 阶段排序、ISO 伴随字段名、`time_string`、`ContentTemplateSelector`、
+DataGrid 列对齐、以及两条规则的自保护（模板改名 / 找不到表头数组）。
+
+> 其中一次负向验证**抓到了测试本身的缺陷**：`time_string` 那条一开始只写
+> `False(text.Contains("…T00:00:00"))`，而时间整个缺失时该断言照样通过 —— 已改为**正向**断言
+> 格式化后的值必须出现。结论：负向验证不只是验证生产代码，也是验证断言。
+
+### 追加到 Windows 人工核对清单
+
+20. **搜索页「添加条件」两个下拉**（本轮截图缺陷）：选完值后应收起态显示
+    `must/should/must_not/filter` 与 `term/match/wildcard/prefix/range/exists`，
+    **不应再出现 `ClauseOption` / `OperatorOption` 这类类型名**；展开列表内容不变。
+21. **其余 `DisplayMemberPath` 下拉一并通过同一处修复，请顺带确认收起态**：
+    设置页的界面语言、快照页「快照管理」的仓库下拉、「快照恢复」页的仓库/快照下拉 ——
+    都应显示语言名/仓库名/快照名，而不是 `LanguageOption` / `EsRepository` / `EsSnapshot`。
+22. **ILM「生命周期」页签的「修改时间」列**：应是 `2026-06-15 20:00:00` 这类本地时间，
+    **不应是 13 位数字**；「阶段」列应为 `hot → warm → cold → frozen → delete` 顺序
+    （即使 ES 返回顺序是乱的）。
+23. **快照页表头**：五个页签的表头都应齐全（3/7/9/9/5 列全部有中文标题），没有空表头。
+24. **语言切换**：在设置页中↔英来回切，搜索页/快照页的标题、页签、按钮、表头、状态行应整体跟着切，
+    不出现中英混排。

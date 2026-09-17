@@ -860,27 +860,35 @@ Check("i18n：同一条词条在 zh_CN / en 里的占位符必须一致", () =>
 // 有一个名为 PART_EditableTextBox 的 TextBox 才能进入编辑态。缺了它，可编辑下拉直接不可用
 // （搜索页的索引下拉就是全项目唯一一个可编辑 ComboBox，也是唯一一个"下拉没数据"的控件）。
 // 构建期看不出来、本机也跑不了 WPF，只能靠静态规则兜住。
-static bool ComboTemplateHasEditableBox(string xaml)
+//
+/// <summary>
+/// 取出 XAML 里 TargetType="ComboBox" 的 ControlTemplate（模板自己的名字域）。
+/// 用 XML 解析而不是字符串搜索，理由有三个，都是踩过的坑：
+///   ① 字符串搜索会被注释里的文字骗到（模板里就有 "PART_EditableTextBox" 的说明）；
+///      解析成元素树后注释根本不是元素，天然排除。
+///   ② 必须限定在 ComboBox 模板自己的名字域里：模板内部还嵌着 ToggleButton 的
+///      ControlTemplate，写在那里的同名元素用 ComboBox.FindName 根本够不到，
+///      字符串搜索却会认为"有"。
+///   ③ 搜索不能一路扫到文件尾，否则后面任何一个模板里的同名元素都能让它变绿。
+/// </summary>
+static XElement? ComboTemplate(string xaml)
 {
-    // 用 XML 解析而不是字符串搜索，理由有三个，都是踩过的坑：
-    //   ① 字符串搜索会被注释里的 "PART_EditableTextBox" 骗到（模板里那段说明文字）；
-    //      解析成元素树后注释根本不是元素，天然排除。
-    //   ② 必须限定在 ComboBox 模板自己的**名字域**里：模板内部还嵌着 ToggleButton 的
-    //      ControlTemplate，写在那里的同名 TextBox 用 ComboBox.FindName 根本够不到，
-    //      字符串搜索却会认为"有"。
-    //   ③ 搜索不能一路扫到文件尾，否则后面任何一个模板里的同名元素都能让它变绿。
-    XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
-    XElement? combo;
     try
     {
-        combo = XDocument.Parse(xaml).Descendants()
+        return XDocument.Parse(xaml).Descendants()
             .FirstOrDefault(e => e.Name.LocalName == "ControlTemplate"
                                  && (string?)e.Attribute("TargetType") == "ComboBox");
     }
     catch (System.Xml.XmlException)
     {
-        return false; // 解析不了的样本一律当作"没有"，由调用方的解析失败提示兜底
+        return null; // 解析不了的样本一律当作"没有"，由调用方按"规则失效"报错
     }
+}
+
+static bool ComboTemplateHasEditableBox(string xaml)
+{
+    XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+    var combo = ComboTemplate(xaml);
     if (combo is null) return false;
 
     return combo.Descendants().Any(e =>
@@ -888,6 +896,36 @@ static bool ComboTemplateHasEditableBox(string xaml)
         && (string?)e.Attribute(x + "Name") == "PART_EditableTextBox"
         && !e.Ancestors().TakeWhile(a => a != combo).Any(a => a.Name.LocalName == "ControlTemplate"));
 }
+
+// ---- 规则：ComboBox 收起态展示器必须绑定 ContentTemplateSelector ----
+//
+// 背景（真实缺陷，用户截图发现）：搜索页"添加条件"的两个下拉选完值以后显示的是
+// "ClauseOption" / "OperatorOption"（被 90px/110px 列宽截断成 "ClauseOp" / "OperatorOp"）。
+// 根源不是 XAML 里 DisplayMemberPath 写错，而是它的实现方式很反直觉：
+//   * ItemsControl 把 DisplayMemberPath 实现成"往 **ItemTemplateSelector** 上装一个内部
+//     DisplayMemberTemplateSelector"（ItemsControl.cs:390-417），ItemTemplate 始终是 null；
+//   * ComboBox.UpdateSelectionBoxItem 只传 SelectionBoxItemTemplate = ItemTemplate
+//     （ComboBox.cs:847-945），**ComboBox.cs 里压根没有 DisplayMemberPath 这个属性**；
+//   * 所以收起态能不能显示成员值，完全取决于模板里的 ContentPresenter 有没有接上
+//     ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"。
+//     官方模板的每个变体都有这一行（Themes/XAML/ComboBox.xaml:373-376 等）。
+// 缺了它：凡是用 DisplayMemberPath 的下拉，收起态都会显示数据对象的 ToString
+// （设置页语言、快照页仓库、搜索页条件行全部中招），展开的列表却是正常的。
+static bool ComboSelectionBoxHasTemplateSelector(string xaml)
+{
+    var combo = ComboTemplate(xaml);
+    if (combo is null) return false;
+
+    var presenter = combo.Descendants().FirstOrDefault(e =>
+        e.Name.LocalName == "ContentPresenter"
+        && ((string?)e.Attribute("Content") ?? "").Contains("SelectionBoxItem", StringComparison.Ordinal)
+        && !e.Ancestors().TakeWhile(a => a != combo).Any(a => a.Name.LocalName == "ControlTemplate"));
+    if (presenter is null) return false; // 展示器换了别的写法：宁可报错也不要静默放过
+
+    return ((string?)presenter.Attribute("ContentTemplateSelector") ?? "")
+        .Contains("ItemTemplateSelector", StringComparison.Ordinal);
+}
+
 
 Check("控件模板：可编辑 ComboBox 必须包含 PART_EditableTextBox", () =>
 {
@@ -912,6 +950,132 @@ Check("控件模板：可编辑 ComboBox 必须包含 PART_EditableTextBox", () 
         throw new Exception(
             $"以下文件使用了可编辑 ComboBox（{string.Join(", ", editableUsers)}），" +
             "但 Themes 下的 ComboBox 模板没有 PART_EditableTextBox —— WPF 无法进入编辑态，下拉会不可用");
+});
+
+Check("控件模板：ComboBox 收起态展示器必须绑定 ContentTemplateSelector（DisplayMemberPath 靠它生效）", () =>
+{
+    var themesDir = Path.Combine(repoRoot, "src", "ElasticDesktopManager", "Themes");
+    var files = Directory.GetFiles(themesDir, "*.xaml").ToList();
+
+    // 规则本身也不能"静默通过"：找不到 ComboBox 模板就直接报错（改名/搬家都要有人来更新这条规则）
+    var withTemplate = files.Where(f => ComboTemplate(File.ReadAllText(f)) is not null).ToList();
+    if (withTemplate.Count == 0)
+        throw new Exception($"Themes 下（{string.Join(", ", files.Select(Path.GetFileName))}）没有找到 ComboBox 的 ControlTemplate，"
+            + "本规则失去保护对象 —— 请更新规则，不要让它空转通过");
+
+    var bad = withTemplate.Where(f => !ComboSelectionBoxHasTemplateSelector(File.ReadAllText(f))).ToList();
+    if (bad.Count > 0)
+        throw new Exception("这些 ComboBox 模板的收起态展示器没有绑定 ContentTemplateSelector：\n    "
+            + string.Join("\n    ", bad.Select(Path.GetFileName))
+            + "\n  DisplayMemberPath 是通过 ItemTemplateSelector 生效的，缺这一行时凡是用 DisplayMemberPath 的下拉"
+            + "收起态都会显示数据对象的 ToString（如 \"ClauseOption\"/\"EsRepository\"），而展开的列表正常");
+});
+
+// ---- 规则：DataGrid 的列数必须等于 code-behind 里表头映射的项数 ----
+//
+// 背景：快照页刻意把**所有**表头文案从 XAML 挪到 code-behind（XAML 里不写任何可见文案），
+// 于是表头靠下标赋值：`grid.Columns[index].Header = ...`，而 `ApplyHeaders` 对越界是**静默跳过**的
+// （对最终用户来说"空表头"比崩溃温和，所以不改运行期行为）。
+// 但代价是：XAML 里多加/少加一列，界面只会安静地少一个表头，编译、单测、其它守卫全绿。
+// 这条规则把"列数 ↔ 数组项数"钉死，让这类错位不可能悄悄上线。
+static Dictionary<string, int> DataGridColumnCounts(string xaml)
+{
+    var map = new Dictionary<string, int>(StringComparer.Ordinal);
+    XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+    XDocument doc;
+    try { doc = XDocument.Parse(xaml); }
+    catch (System.Xml.XmlException) { return map; }
+
+    foreach (var grid in doc.Descendants().Where(e => e.Name.LocalName == "DataGrid"))
+    {
+        string? name = (string?)grid.Attribute(x + "Name");
+        if (string.IsNullOrEmpty(name)) continue;
+        var cols = grid.Elements().FirstOrDefault(e => e.Name.LocalName == "DataGrid.Columns");
+        if (cols is null) continue;
+        map[name] = cols.Elements()
+            .Count(e => e.Name.LocalName.StartsWith("DataGrid", StringComparison.Ordinal)
+                        && e.Name.LocalName.EndsWith("Column", StringComparison.Ordinal));
+    }
+    return map;
+}
+
+static Dictionary<string, int> HeaderMapCounts(string codeBehind)
+{
+    var map = new Dictionary<string, int>(StringComparer.Ordinal);
+    foreach (Match m in Regex.Matches(codeBehind,
+                 @"(\w+)Headers\s*=\s*\{(?<body>[^}]*)\}", RegexOptions.Singleline))
+    {
+        map[m.Groups[1].Value + "Headers"] =
+            Regex.Matches(m.Groups["body"].Value, @"\(\s*\d+\s*,").Count;
+    }
+    return map;
+}
+
+/// <summary>返回问题清单；空 = 对齐。`XxxGrid` 对应 `XxxHeaders`。</summary>
+static List<string> GridHeaderProblems(string xaml, string codeBehind)
+{
+    var problems = new List<string>();
+    var grids = DataGridColumnCounts(xaml);
+    if (grids.Count == 0)
+    {
+        problems.Add("没有解析到任何带 x:Name 的 DataGrid —— 本规则失去保护对象，请更新规则（不要空转通过）");
+        return problems;
+    }
+    var maps = HeaderMapCounts(codeBehind);
+    foreach (var (grid, columns) in grids)
+    {
+        if (!grid.EndsWith("Grid", StringComparison.Ordinal))
+        {
+            problems.Add($"{grid}：命名不符合 XxxGrid 约定，无法推出对应的表头映射数组");
+            continue;
+        }
+        string expectedMap = grid[..^"Grid".Length] + "Headers";
+        if (!maps.TryGetValue(expectedMap, out int entries))
+        {
+            problems.Add($"{grid}：code-behind 里找不到 {expectedMap}，表头会整列空白");
+            continue;
+        }
+        if (columns != entries)
+            problems.Add($"{grid}：XAML {columns} 列 vs {expectedMap} {entries} 项 —— ApplyHeaders 对越界是静默跳过的，界面只会安静地少表头");
+    }
+    return problems;
+}
+
+Check("DataGrid：列数必须等于 code-behind 表头映射的项数（ApplyHeaders 越界是静默的）", () =>
+{
+    string xaml = Path.Combine(viewsDir, "SnapshotView.xaml");
+    string cs = Path.Combine(viewsDir, "SnapshotView.xaml.cs");
+    if (!File.Exists(xaml) || !File.Exists(cs))
+        throw new Exception("找不到 SnapshotView.xaml / SnapshotView.xaml.cs —— 本规则失去保护对象");
+
+    var problems = GridHeaderProblems(File.ReadAllText(xaml), File.ReadAllText(cs));
+    if (problems.Count > 0)
+        throw new Exception("快照页表头映射与列数不一致：\n    " + string.Join("\n    ", problems));
+});
+
+Check("守卫自检：DataGrid 列数与表头映射不一致必须能被抓出", () =>
+{
+    const string xns = "xmlns:x=\"http://schemas.microsoft.com/winfx/2006/xaml\"";
+    string twoCols = $"<UserControl {xns}><DataGrid x:Name=\"RepoGrid\"><DataGrid.Columns>"
+        + "<DataGridTextColumn /><DataGridTextColumn /></DataGrid.Columns></DataGrid></UserControl>";
+    string twoEntries = """static readonly (int, string)[] RepoHeaders = { (0, "a"), (1, "b") };""";
+
+    if (GridHeaderProblems(twoCols, twoEntries).Count != 0)
+        throw new Exception("误报：2 列 vs 2 项应判定对齐");
+    if (GridHeaderProblems(twoCols, """static readonly (int, string)[] RepoHeaders = { (0, "a") };""").Count != 1)
+        throw new Exception("未抓出列数多于表头项数");
+    if (GridHeaderProblems(twoCols, """static readonly (int, string)[] RepoHeaders = { (0, "a"), (1, "b"), (2, "c") };""").Count != 1)
+        throw new Exception("未抓出表头项数多于列数");
+    if (!GridHeaderProblems(twoCols, "// 没有映射").Single().Contains("找不到 RepoHeaders", StringComparison.Ordinal))
+        throw new Exception("未抓出缺失的表头映射数组");
+    if (GridHeaderProblems($"<UserControl {xns}><Grid /></UserControl>", twoEntries).Count != 1)
+        throw new Exception("一个 DataGrid 都没有时必须报错，而不是静默通过");
+    // 模板列也算一列（DataGridTemplateColumn 里面有 .CellTemplate 属性元素，别把子节点数错）
+    string tpl = $"<UserControl {xns}><DataGrid x:Name=\"RepoGrid\"><DataGrid.Columns>"
+        + "<DataGridTemplateColumn><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock /></DataTemplate>"
+        + "</DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn></DataGrid.Columns></DataGrid></UserControl>";
+    if (!GridHeaderProblems(tpl, twoEntries).Single().Contains("1 列", StringComparison.Ordinal))
+        throw new Exception("模板列应计为 1 列（不能把 CellTemplate 里的子节点也算成列）");
 });
 
 // ---- 规则：代码里用到的 i18n key 必须真的存在 ----
@@ -1017,7 +1181,7 @@ Check("i18n：代码里用到的 key 都存在于词典（防漏词条 → 界�
         throw new Exception($"发现 {hits.Count} 个未定义的 key：\n    " + string.Join("\n    ", hits.Distinct()));
 });
 
-Check("守卫自检：未定义的 i18n key / 缺失的 PART_EditableTextBox 必须能被抓出", () =>
+Check("守卫自检：未定义的 i18n key / 缺失的 PART_EditableTextBox / 未接 ContentTemplateSelector 必须能被抓出", () =>
 {
     var keys = new HashSet<string> { "nav.home", "snapshot.col.name" };
     var prefixes = new HashSet<string> { "nav", "snapshot" };
@@ -1074,6 +1238,24 @@ Check("守卫自检：未定义的 i18n key / 缺失的 PART_EditableTextBox 必
     if (ComboTemplateHasEditableBox(
             $"<ResourceDictionary {xns}><ControlTemplate TargetType=\"ComboBox\"><ContentPresenter /></ControlTemplate><ControlTemplate TargetType=\"Other\"><TextBox x:Name=\"PART_EditableTextBox\" /></ControlTemplate></ResourceDictionary>"))
         throw new Exception("误报：别的模板里的同名部件不该让本条通过");
+
+    // 收起态展示器：DisplayMemberPath 靠 ContentTemplateSelector 生效
+    const string box = """<ContentPresenter Content="{TemplateBinding SelectionBoxItem}" ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}" ContentStringFormat="{TemplateBinding SelectionBoxItemStringFormat}" />""";
+    const string boxFixed = """<ContentPresenter Content="{TemplateBinding SelectionBoxItem}" ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}" ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}" ContentStringFormat="{TemplateBinding SelectionBoxItemStringFormat}" />""";
+    if (!ComboSelectionBoxHasTemplateSelector(
+            $"<ResourceDictionary {xns}><ControlTemplate TargetType=\"ComboBox\">{boxFixed}</ControlTemplate></ResourceDictionary>"))
+        throw new Exception("未识别已绑定 ContentTemplateSelector 的收起态展示器");
+    if (ComboSelectionBoxHasTemplateSelector(
+            $"<ResourceDictionary {xns}><ControlTemplate TargetType=\"ComboBox\">{box}</ControlTemplate></ResourceDictionary>"))
+        throw new Exception("未抓出缺失的 ContentTemplateSelector（这正是 DisplayMemberPath 显示 ToString 的缺陷）");
+    // 写在子模板里的展示器不算（ComboBox 收起态用的是自己名字域里的那个）
+    if (ComboSelectionBoxHasTemplateSelector(
+            $"<ResourceDictionary {xns}><ControlTemplate TargetType=\"ComboBox\"><ContentPresenter /></ControlTemplate><ControlTemplate TargetType=\"Other\">{boxFixed}</ControlTemplate></ResourceDictionary>"))
+        throw new Exception("误报：别的模板里的展示器不该让本条通过");
+    // 换掉展示器的写法也必须报错，而不是"没找到 → 通过"
+    if (ComboSelectionBoxHasTemplateSelector(
+            $"<ResourceDictionary {xns}><ControlTemplate TargetType=\"ComboBox\"><TextBlock /></ControlTemplate></ResourceDictionary>"))
+        throw new Exception("展示器改成别的写法时必须报错（规则不能空转通过）");
 
     // ---- 占位符一致性 ----
     var zh = DictionaryEntries("""["a"]="{0} 个{x}", "b"="没有占位符",""");

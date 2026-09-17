@@ -116,3 +116,55 @@
 - 深色背景：**成立**。诊断（隐式 `TargetType="Window"` 样式不作用于派生窗口）与修法（11 个窗口显式套样式 + MainWindow 直写 Background）都已在代码里闭环，并新增守卫防回归。
 - 索引下拉：**部分成立，且根因未完全证实**。缺 `PART_EditableTextBox` 是真实的模板契约违规（可编辑区确实坏），删除有副作用的触发器也合理，但**它解释不了"列表为空"** —— 加载/解析路径与旧代码功能等价。因此本轮的实际交付是"修好可编辑能力 + 让失败可见（数量/空态/错误原因 + 手动刷新按钮）"，而不是"已定位根因"。这一点已如实告知用户，并请其在 Windows 上复验。
 - 快照五列表：**成立**（B2 修掉后）。五个列表、按页签懒加载、`TabStatus` 独立报错都已具备；保留列已可见；恢复页"来源"列已能显示。
+
+---
+
+# 第 5 轮审查记录
+
+范围：用户截图缺陷（搜索页条件行两个下拉）+ 一份独立 Core/ES 复审报告。
+复审报告写于 `8d41960`，而当时 HEAD 已是 `2690d50` —— 很多意见**在报告写出前就已被 `2690d50` 修掉**。
+按纪律逐条回代码核实，**不以报告的"Blocking"标签为准**。
+
+## 复审意见逐条核实（7 条成立、1 条不成立、10 条已在 `2690d50` 修掉）
+
+### 成立且本轮已修
+
+| # | 意见 | 核实结果 | 处置 |
+|---|---|---|---|
+| C1 | ILM「修改时间」列恒为裸毫秒：`FormatIsoDate(GetString(el,"modified_date"))` | **成立**（`LifecyclePolicyMetadata.java` 7.17 / 8.17 / main 均为 `declareLong`，ISO 在 `modified_date_string`；`JsonHelper.GetString` 对 Number 走 `GetRawText()`，`FormatIsoDate` 失败后原样返回） | 改 `TimestampOf(el, "modified_date", "modified_date_string")`；fixture 改成毫秒真实形状 + 正向断言格式化结果 |
+| C2 | ILM 阶段链顺序不可信（`Collectors.toMap` → HashMap） | **成立**（并进一步确认 `readImmutableMap` 路径下顺序甚至随 JVM 随机） | 按 `ORDERED_VALID_PHASES` 稳定排序；测试用打乱顺序的 fixture 断言输出顺序 |
+| C3 | `ParseRunInfo` 的 ISO 伴随字段名应为 `time_string`（写的是 `time_millis`，永不触发） | **成立**（`SnapshotInvocationRecord.toXContent` 写 `time` + `time_string`；行为当前正确，属死分支） | 改为 `time_string`；新增"只有 `time_string`"的用例 |
+| C4 | `ApplyHeaders` 越界静默跳过，且守卫不覆盖"列数 ↔ 表头数组" | **成立**（运行期静默保留：对用户来说空表头优于崩溃） | 新增守卫第 17 项机械比对列数与数组项数；**并纠正了上一轮文档里 `3/7/9/8/5` 的笔误（实际 `3/7/9/9/5`）** |
+| C5 | 用户截图：条件行两个下拉收起态显示 `ClauseOption`/`OperatorOption` | **成立**（根因不是 XAML 写错，而是自写模板漏 `ContentTemplateSelector`；`DisplayMemberPath` 由 `ItemTemplateSelector` 实现） | 补该绑定（一行），顺带修好全项目 6 个 `DisplayMemberPath` 下拉；新增守卫第 16 项 |
+
+### 不成立（未采纳）
+
+| # | 意见 | 核实结果 |
+|---|---|---|
+| C6 | 守卫 `ComboTemplateHasEditableBox` 不可靠（搜索到文件尾、只认字面量 `IsEditable="True"`） | **不成立**（第 5 轮的复审重复了上一轮 B3；该函数在 `2690d50` 已重写为 `XDocument` 名字域解析，并在 `840+` 行有注释/子模板/后续模板三个自检方向）。另外报告称"守卫的跨词典规则只比数量"同样是上一轮的 B4，`Program.cs:171` 已有集合差比对 |
+
+### 已在 `2690d50` 修掉（报告基于 `8d41960`，属时间差）
+
+- `SnapshotView.xaml.cs` 丢掉 `Localization.LanguageChanged` 订阅（本轮再次确认订阅在位）
+- 五页签共用 `IsFormOpen` / `ToggleFormCommand` → 已拆成 4 个独立 bool
+- `HostOf` 对 `type=SNAPSHOT` 的 `source` 恒空 → 已回退 `repository/snapshot`
+- `ParseRecovery` 缺 `ValueKind == Object` 判断 → 已补
+- `RetentionText` 解析了没有列显示 → 已加"保留"列；`PhaseCount`/`IsFailed` 死代码 → 已删（`IsDone` 已用于状态圆点）
+- 语言切换会把 ES 错误文案覆盖成成功文案 → 已改为只重写成功文案
+- 守卫前缀闸门静默放过首段拼错的 key → 已移除闸门 + 白名单
+- `SelectedRepository` setter 的两处 fire-and-forget 互相竞争 → 已用 `_suppressSelectedReload` 收口
+- 空表头/XAML 英文占位与注释矛盾 → 已改注释；本轮再由守卫第 17 项机械保证
+- 保留/统计/分片文本解析时缓存、切语言不重解析 → **仍作为已接受的限制**（ADR-10 代价）
+
+### 经核实属"计数笔误"，不是缺陷
+
+报告称恢复页列数 `8`（`3/7/9/8/5`）。逐列核对为 `9`（Index/Shard/Stage/Type/Source/Target/Files/Bytes/Time），
+与 `RecoveryHeaders` 的 9 项一致。守卫第 17 项上线后这类计数不再依赖人工。
+
+## 本轮守则：负向验证也要验"断言本身"
+
+`time_string` 用例的第一次实现只写了 `False(text.Contains("…T00:00:00"))` —— 负向验证（把
+`time_string` 改回 `time_millis`）时**它照样通过**，因为时间整个缺失时"不含某串"恒真。
+已改为正向断言"格式化后的值必须出现"。教训：**负向验证通过 ≠ 断言有效**，
+"只能否定"的断言（不含某串/非空/不为 null）在字段缺失时往往恒真，必须补正向。
+（同批的其余 6 条负向验证均按预期精准报错。）
