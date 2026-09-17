@@ -45,6 +45,38 @@ public static class EsQueryHelper
         return body.ToJsonString();
     }
 
+    /// <summary>
+    /// 从 <c>GET /{index}/_mapping</c> 的响应中取出可直接提交给
+    /// <c>PUT /{index}/_mapping</c> 的映射体。
+    ///
+    /// GET 返回形如 <c>{ "&lt;index&gt;": { "mappings": { "properties": {...} } } }</c>，
+    /// 而 PUT 只接受 <c>{ "properties": {...} }</c>。若传入的已是 properties 形态则原样返回，
+    /// 便于“读取 → 编辑 → 保存”闭环。
+    /// </summary>
+    public static string ExtractMappingBody(string json)
+    {
+        var root = TryParse(json);
+        if (root is null) return json;
+        if (root.ContainsKey("properties")) return root.ToJsonString();
+
+        var first = root.FirstOrDefault().Value as JsonObject;
+        return first?["mappings"] is JsonNode mappings ? mappings.ToJsonString() : json;
+    }
+
+    /// <summary>
+    /// 从 <c>GET /{index}/_settings</c> 的响应中取出可提交给
+    /// <c>PUT /{index}/_settings</c> 的设置体（去掉最外层索引名与 "settings" 包装）。
+    /// </summary>
+    public static string ExtractSettingsBody(string json)
+    {
+        var root = TryParse(json);
+        if (root is null) return json;
+        if (root.ContainsKey("index")) return root.ToJsonString();
+
+        var first = root.FirstOrDefault().Value as JsonObject;
+        return first?["settings"] is JsonNode settings ? settings.ToJsonString() : json;
+    }
+
     private static JsonObject? TryParse(string json)
     {
         try

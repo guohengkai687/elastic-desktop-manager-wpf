@@ -32,7 +32,7 @@ public partial class EsExamplesWindow : Window
         CloseButton.Content = Localization.L("common.close");
 
         FilterBox.Text = Localization.L("rest.examples.search");
-        FilterBox.Foreground = (System.Windows.Media.Brush)FindResource("DimTextBrush");
+        FilterBox.Foreground = Brush("DimTextBrush");
         FilterBox.GotFocus += OnFilterGotFocus;
         FilterBox.LostFocus += OnFilterLostFocus;
         FilterBox.TextChanged += (_, _) => RebuildTree();
@@ -47,7 +47,7 @@ public partial class EsExamplesWindow : Window
     {
         if (_suppressFilter) return;
         FilterBox.Text = "";
-        FilterBox.Foreground = (System.Windows.Media.Brush)FindResource("TextBrush");
+        FilterBox.Foreground = Brush("TextPrimaryBrush");
     }
 
     private void OnFilterLostFocus(object sender, RoutedEventArgs e)
@@ -55,9 +55,18 @@ public partial class EsExamplesWindow : Window
         if (!string.IsNullOrEmpty(FilterBox.Text)) return;
         _suppressFilter = true;
         FilterBox.Text = Localization.L("rest.examples.search");
-        FilterBox.Foreground = (System.Windows.Media.Brush)FindResource("DimTextBrush");
+        FilterBox.Foreground = Brush("DimTextBrush");
         _suppressFilter = false;
     }
+
+    /// <summary>
+    /// 安全取画刷：用 TryFindResource 而非 FindResource。
+    /// FindResource 在 key 不存在时抛 ResourceReferenceKeyNotFoundException（运行时崩溃、编译期无错），
+    /// 这里回退到透明/当前前景色，保证主题改名不会让窗口崩掉。
+    /// </summary>
+    private System.Windows.Media.Brush Brush(string key)
+        => TryFindResource(key) as System.Windows.Media.Brush
+           ?? System.Windows.Media.Brushes.Transparent;
 
     private string CurrentFilter()
     {

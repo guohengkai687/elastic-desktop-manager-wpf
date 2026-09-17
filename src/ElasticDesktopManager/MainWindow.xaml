@@ -3,20 +3,20 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:ElasticDesktopManager.ViewModels"
         Title="Elastic Desktop Manager"
-        Height="820" Width="1340" MinHeight="680" MinWidth="1120"
+        Height="860" Width="1400" MinHeight="700" MinWidth="1160"
         WindowStartupLocation="CenterScreen"
         Closing="OnClosing">
     <Grid x:Name="RootGrid">
         <Grid.RowDefinitions>
-            <RowDefinition Height="48" />
+            <RowDefinition Height="{StaticResource TitleBarHeight}" />
             <RowDefinition Height="*" />
-            <RowDefinition Height="28" />
+            <RowDefinition Height="{StaticResource StatusBarHeight}" />
         </Grid.RowDefinitions>
 
         <!-- ================= 顶栏 ================= -->
         <Border Grid.Row="0" Background="{DynamicResource SurfaceBrush}"
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-            <Grid Margin="12,0">
+            <Grid Margin="14,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
@@ -26,8 +26,9 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
+                <!-- 品牌 -->
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <Border Width="26" Height="26" CornerRadius="6"
+                    <Border Width="28" Height="28" CornerRadius="{StaticResource RadiusMd}"
                             Background="{DynamicResource AccentBrush}">
                         <TextBlock Text="ES" Foreground="White" FontWeight="Bold" FontSize="11"
                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
@@ -36,18 +37,18 @@
                                Margin="10,0,0,0" VerticalAlignment="Center" />
                 </StackPanel>
 
-                <!-- 跳过SSL验证徽标 -->
+                <!-- 跳过 SSL 验证徽标 -->
                 <Border Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center"
                         Visibility="{Binding SslSkipped, Converter={StaticResource BoolToVisibility}}"
-                        Background="{DynamicResource YellowBrush}" CornerRadius="10" Padding="8,2">
-                    <TextBlock Text="⚠ 跳过 SSL 验证" Foreground="White" FontSize="11" />
+                        Style="{StaticResource BadgeStyle}" Background="{DynamicResource YellowBrush}">
+                    <TextBlock Text="⚠ SSL" Foreground="White" FontSize="11" FontWeight="SemiBold" />
                 </Border>
 
                 <!-- 连接选择器 -->
                 <Button Grid.Column="2" HorizontalAlignment="Left" Margin="20,0,0,0"
-                        VerticalAlignment="Center" Padding="10,4" Command="{Binding OpenConnectionsCommand}">
+                        VerticalAlignment="Center" Padding="11,5" Command="{Binding OpenConnectionsCommand}">
                     <StackPanel Orientation="Horizontal">
-                        <Ellipse Width="9" Height="9" VerticalAlignment="Center">
+                        <Ellipse Width="8" Height="8" VerticalAlignment="Center">
                             <Ellipse.Style>
                                 <Style TargetType="Ellipse">
                                     <Setter Property="Fill" Value="{DynamicResource GrayBrush}" />
@@ -59,12 +60,13 @@
                                 </Style>
                             </Ellipse.Style>
                         </Ellipse>
-                        <TextBlock Text="{Binding ConnectionLabel}" Margin="8,0,4,0" VerticalAlignment="Center" />
-                        <TextBlock Text="▾" VerticalAlignment="Center" Foreground="{DynamicResource TextSecondaryBrush}" />
+                        <TextBlock Text="{Binding ConnectionLabel}" Margin="9,0,6,0" VerticalAlignment="Center" />
+                        <TextBlock Text="▾" VerticalAlignment="Center" FontSize="10"
+                                   Foreground="{DynamicResource TextSecondaryBrush}" />
                     </StackPanel>
                 </Button>
 
-                <Button Grid.Column="3" Style="{StaticResource IconButtonStyle}" Margin="6,0,0,0"
+                <Button Grid.Column="3" Style="{StaticResource IconButtonStyle}" Margin="8,0,0,0"
                         ToolTip="Theme" Command="{Binding ToggleThemeCommand}">
                     <TextBlock Text="{Binding ThemeGlyph}" FontSize="15" />
                 </Button>
@@ -82,44 +84,32 @@
         <!-- ================= 内容区 ================= -->
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="170" />
+                <ColumnDefinition Width="{StaticResource NavWidth}" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <!-- 左侧导航 -->
+            <!-- 左侧导航：图标 + 文字，选中态带强调指示条 -->
             <Border Background="{DynamicResource SurfaceBrush}"
-                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0" Padding="8">
+                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0" Padding="4,8">
                 <ListBox ItemsSource="{Binding NavItems}" SelectedItem="{Binding SelectedNav}"
-                         Background="Transparent" BorderThickness="0" Padding="0">
+                         Background="Transparent" BorderThickness="0" Padding="0"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                     <ListBox.ItemContainerStyle>
-                        <Style TargetType="ListBoxItem">
-                            <Setter Property="Padding" Value="10,9" />
-                            <Setter Property="Margin" Value="0,2" />
-                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                            <Setter Property="Background" Value="Transparent" />
-                            <Setter Property="Template">
-                                <Setter.Value>
-                                    <ControlTemplate TargetType="ListBoxItem">
-                                        <Border x:Name="bd" Background="{TemplateBinding Background}"
-                                                CornerRadius="5" Padding="{TemplateBinding Padding}">
-                                            <ContentPresenter />
-                                        </Border>
-                                        <ControlTemplate.Triggers>
-                                            <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource HoverBrush}" />
-                                            </Trigger>
-                                            <Trigger Property="IsSelected" Value="True">
-                                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource NavSelectedBrush}" />
-                                            </Trigger>
-                                        </ControlTemplate.Triggers>
-                                    </ControlTemplate>
-                                </Setter.Value>
-                            </Setter>
-                        </Style>
+                        <StaticResource ResourceKey="NavListBoxItemStyle" />
                     </ListBox.ItemContainerStyle>
                     <ListBox.ItemTemplate>
                         <DataTemplate>
-                            <TextBlock Text="{Binding Title}" FontSize="13" />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="24" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{Binding Glyph}" FontSize="14" VerticalAlignment="Center"
+                                           HorizontalAlignment="Center" />
+                                <TextBlock Grid.Column="1" Text="{Binding Title}" FontSize="13"
+                                           VerticalAlignment="Center" Margin="8,0,0,0"
+                                           TextTrimming="CharacterEllipsis" />
+                            </Grid>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
@@ -132,14 +122,15 @@
         <!-- ================= 状态栏 ================= -->
         <Border Grid.Row="2" Background="{DynamicResource SurfaceBrush}"
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
-            <Grid Margin="12,0">
+            <Grid Margin="14,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <TextBlock Text="{Binding StatusText}" FontSize="11"
-                           Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
-                <ProgressBar Grid.Column="1" Width="150" Height="6" Margin="12,0,0,0"
+                           Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" />
+                <ProgressBar Grid.Column="1" Width="140" Margin="14,0,0,0"
                              HorizontalAlignment="Right" VerticalAlignment="Center"
                              IsIndeterminate="True"
                              Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" />
@@ -148,9 +139,11 @@
 
         <!-- ================= Toast ================= -->
         <Border x:Name="ToastHost" Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Bottom"
-                Margin="0,0,0,24" Visibility="Collapsed" Opacity="0"
-                Background="#CC333333" CornerRadius="14" Padding="16,8" IsHitTestVisible="False">
-            <TextBlock x:Name="ToastText" Foreground="White" FontSize="13" />
+                Margin="0,0,0,28" Visibility="Collapsed" Opacity="0"
+                Background="{DynamicResource OverlayBrush}"
+                CornerRadius="{StaticResource RadiusLg}" Padding="18,10"
+                Effect="{StaticResource ShadowLg}" IsHitTestVisible="False">
+            <TextBlock x:Name="ToastText" Foreground="{DynamicResource OverlayTextBrush}" FontSize="13" />
         </Border>
     </Grid>
 </Window>

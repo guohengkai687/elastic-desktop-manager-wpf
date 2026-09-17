@@ -14,7 +14,7 @@ namespace ElasticDesktopManager.Core.Es;
 /// 通过 <see cref="HttpClientHandler.ServerCertificateCustomValidationCallback"/> 接受任意服务器证书
 /// （适用于自签名证书 / 内网 CA）。
 /// </summary>
-public sealed class EsClient : IDisposable
+public sealed partial class EsClient : IDisposable
 {
     private readonly HttpClient _http;
     private readonly ConfigProperty _config;

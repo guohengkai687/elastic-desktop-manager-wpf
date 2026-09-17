@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using ElasticDesktopManager.Core.I18n;
+using ElasticDesktopManager.Mvvm;
 using ElasticDesktopManager.ViewModels;
 
 namespace ElasticDesktopManager.Views;
@@ -43,6 +44,18 @@ public partial class IndicesView : UserControl
         var menu = new ContextMenu();
         AddItem(menu, vm.DetailsCommand, row, Localization.L("index.detail"));
         AddItem(menu, vm.StatsCommand, row, Localization.L("index.stats"));
+        menu.Items.Add(new Separator());
+        // 索引工具：Mapping/Settings/别名/字段Top值/维护/迁移（对应 ES-King 的索引管理能力）
+        var tools = new MenuItem
+        {
+            Header = Localization.L("indextools.title"),
+            Command = new RelayCommand(_ =>
+            {
+                if (row is ElasticDesktopManager.Core.Models.EsIndex idx && !string.IsNullOrEmpty(idx.Index))
+                    Services.Ui.ShowIndexTools(idx.Index);
+            }),
+        };
+        menu.Items.Add(tools);
         menu.Items.Add(new Separator());
         AddItem(menu, vm.RefreshIndexCommand, row, Localization.L("index.refreshIdx"));
         AddItem(menu, vm.FlushCommand, row, Localization.L("index.flush"));

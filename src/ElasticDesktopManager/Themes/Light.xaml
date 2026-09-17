@@ -1,22 +1,60 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <!-- 浅色主题 -->
-    <SolidColorBrush x:Key="WindowBackgroundBrush" Color="#F5F6F8" />
+    <!--
+      ============ 浅色主题色板 ============
+      key 集合与 Dark.xaml 完全一致（binding-guard 规则强制校验）。
+      对比度：正文 #1B1F26 on #FFFFFF ≈ 15.8:1；次要 #5A6270 ≈ 6.4:1；DimText 仅用于提示。
+    -->
+
+    <!-- 底层 -->
+    <SolidColorBrush x:Key="WindowBackgroundBrush" Color="#F4F5F7" />
     <SolidColorBrush x:Key="SurfaceBrush" Color="#FFFFFF" />
-    <SolidColorBrush x:Key="SurfaceAltBrush" Color="#F0F1F4" />
-    <SolidColorBrush x:Key="BorderBrush" Color="#D9DCE1" />
-    <SolidColorBrush x:Key="HoverBrush" Color="#E8EBF0" />
-    <SolidColorBrush x:Key="TextPrimaryBrush" Color="#1F2329" />
-    <SolidColorBrush x:Key="TextSecondaryBrush" Color="#646A73" />
-    <SolidColorBrush x:Key="DimTextBrush" Color="#8A919C" />
-    <SolidColorBrush x:Key="AccentBrush" Color="#0A6CFF" />
-    <SolidColorBrush x:Key="AccentHoverBrush" Color="#0958D9" />
-    <SolidColorBrush x:Key="AccentFaintBrush" Color="#E6F0FF" />
-    <SolidColorBrush x:Key="DangerBrush" Color="#D64541" />
-    <SolidColorBrush x:Key="GreenBrush" Color="#2E9E44" />
-    <SolidColorBrush x:Key="YellowBrush" Color="#D9A621" />
-    <SolidColorBrush x:Key="RedBrush" Color="#D64541" />
-    <SolidColorBrush x:Key="GrayBrush" Color="#98A0AB" />
-    <SolidColorBrush x:Key="NavSelectedBrush" Color="#E6F0FF" />
+    <SolidColorBrush x:Key="SurfaceAltBrush" Color="#F7F8FA" />
+    <SolidColorBrush x:Key="SurfaceRaisedBrush" Color="#FFFFFF" />
+
+    <!-- 描边与分隔 -->
+    <SolidColorBrush x:Key="BorderBrush" Color="#E2E5EA" />
+    <SolidColorBrush x:Key="BorderStrongBrush" Color="#CDD3DC" />
+    <SolidColorBrush x:Key="SeparatorBrush" Color="#E8EBEF" />
+    <SolidColorBrush x:Key="FocusRingBrush" Color="#1F6FEB" />
+
+    <!-- 交互态 -->
+    <SolidColorBrush x:Key="HoverBrush" Color="#EEF1F5" />
+    <SolidColorBrush x:Key="HoverStrongBrush" Color="#E3E8EF" />
+    <SolidColorBrush x:Key="PressedBrush" Color="#D8DEE7" />
+
+    <!-- 文本 -->
+    <SolidColorBrush x:Key="TextPrimaryBrush" Color="#1B1F26" />
+    <SolidColorBrush x:Key="TextSecondaryBrush" Color="#5A6270" />
+    <SolidColorBrush x:Key="DimTextBrush" Color="#878E9A" />
+
+    <!-- 强调 -->
+    <SolidColorBrush x:Key="AccentBrush" Color="#1F6FEB" />
+    <SolidColorBrush x:Key="AccentHoverBrush" Color="#1A5FD0" />
+    <SolidColorBrush x:Key="AccentFaintBrush" Color="#E8F1FE" />
+    <SolidColorBrush x:Key="AccentSubtleBrush" Color="#EDF4FE" />
+    <SolidColorBrush x:Key="AccentTextBrush" Color="#1F6FEB" />
+
+    <!-- 语义色 -->
+    <SolidColorBrush x:Key="DangerBrush" Color="#D93B34" />
+    <SolidColorBrush x:Key="GreenBrush" Color="#1F9D45" />
+    <SolidColorBrush x:Key="YellowBrush" Color="#B8860B" />
+    <SolidColorBrush x:Key="RedBrush" Color="#D93B34" />
+    <SolidColorBrush x:Key="GrayBrush" Color="#99A1AC" />
+
+    <!-- 导航 -->
+    <SolidColorBrush x:Key="NavSelectedBrush" Color="#E8F1FE" />
+    <SolidColorBrush x:Key="NavIndicatorBrush" Color="#1F6FEB" />
+
+    <!-- 浮层：浅色下用深色浮层 + 白字，保证对比 -->
+    <SolidColorBrush x:Key="OverlayBrush" Color="#E61F2430" />
+    <SolidColorBrush x:Key="OverlayTextBrush" Color="#FFFFFF" />
+
+    <!-- 滚动条 -->
+    <SolidColorBrush x:Key="ScrollThumbBrush" Color="#C4CAD4" />
+    <SolidColorBrush x:Key="ScrollThumbHoverBrush" Color="#A9B1BE" />
+
+    <!-- 表格 -->
+    <SolidColorBrush x:Key="SelectedRowBrush" Color="#DCE9FC" />
 </ResourceDictionary>

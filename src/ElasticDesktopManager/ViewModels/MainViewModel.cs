@@ -12,6 +12,9 @@ public class NavItem : ObservableObject
     public required string Code { get; init; }
     public required string TitleKey { get; init; }
 
+    /// <summary>导航图标（文本字形，避免引入图标包依赖）。</summary>
+    public string Glyph { get; init; } = "";
+
     public string Title => Localization.L(TitleKey);
 
     public void RefreshTitle() => OnPropertyChanged(nameof(Title));
@@ -29,13 +32,17 @@ public class MainViewModel : ObservableObject
 
     public ObservableList<NavItem> NavItems { get; } = new()
     {
-        new NavItem { Code = "home", TitleKey = "nav.home" },
-        new NavItem { Code = "nodes", TitleKey = "nav.nodes" },
-        new NavItem { Code = "shards", TitleKey = "nav.shards" },
-        new NavItem { Code = "indices", TitleKey = "nav.indices" },
-        new NavItem { Code = "rest", TitleKey = "nav.rest" },
-        new NavItem { Code = "sql", TitleKey = "nav.sql" },
-        new NavItem { Code = "search", TitleKey = "nav.search" },
+        new NavItem { Code = "home", TitleKey = "nav.home", Glyph = "❤" },
+        new NavItem { Code = "nodes", TitleKey = "nav.nodes", Glyph = "⬡" },
+        new NavItem { Code = "shards", TitleKey = "nav.shards", Glyph = "▦" },
+        new NavItem { Code = "indices", TitleKey = "nav.indices", Glyph = "☰" },
+        new NavItem { Code = "metrics", TitleKey = "nav.metrics", Glyph = "▤" },
+        new NavItem { Code = "rest", TitleKey = "nav.rest", Glyph = "⚡" },
+        new NavItem { Code = "sql", TitleKey = "nav.sql", Glyph = "⌘" },
+        new NavItem { Code = "search", TitleKey = "nav.search", Glyph = "◎" },
+        new NavItem { Code = "analyze", TitleKey = "nav.analyze", Glyph = "✂" },
+        new NavItem { Code = "diag", TitleKey = "nav.diag", Glyph = "⚕" },
+        new NavItem { Code = "templates", TitleKey = "nav.templates", Glyph = "❐" },
     };
 
     private NavItem? _selectedNav;
@@ -199,9 +206,13 @@ public class MainViewModel : ObservableObject
             "nodes" => Create<Views.NodesView, ViewModels.NodesViewModel>(),
             "shards" => Create<Views.ShardsView, ViewModels.ShardsViewModel>(),
             "indices" => Create<Views.IndicesView, ViewModels.IndicesViewModel>(),
+            "metrics" => Create<Views.MetricsView, ViewModels.MetricsViewModel>(),
             "rest" => Create<Views.RestView, ViewModels.RestViewModel>(),
             "sql" => Create<Views.SqlView, ViewModels.SqlViewModel>(),
             "search" => Create<Views.SearchView, ViewModels.SearchViewModel>(),
+            "analyze" => Create<Views.AnalyzeView, ViewModels.AnalyzeViewModel>(),
+            "diag" => Create<Views.DiagnosticsView, ViewModels.DiagnosticsViewModel>(),
+            "templates" => Create<Views.TemplatesView, ViewModels.TemplatesViewModel>(),
             _ => throw new KeyNotFoundException(code),
         };
         _pages[code] = view;

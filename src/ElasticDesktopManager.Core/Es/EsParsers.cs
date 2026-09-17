@@ -188,6 +188,153 @@ public static class EsParsers
         return result;
     }
 
+    // ================= 新增：分词 / 模板 / 字段 Top 值 =================
+
+    /// <summary>解析 _analyze 响应的 tokens 数组。</summary>
+    public static List<AnalyzeToken> ParseAnalyzeTokens(string json)
+    {
+        var list = new List<AnalyzeToken>();
+        using var doc = JsonDocument.Parse(json);
+        if (!doc.RootElement.TryGetProperty("tokens", out var tokens) ||
+            tokens.ValueKind != JsonValueKind.Array)
+            return list;
+
+        foreach (var el in tokens.EnumerateArray())
+        {
+            list.Add(new AnalyzeToken
+            {
+                Token = JsonHelper.GetString(el, "token"),
+                StartOffset = GetInt(el, "start_offset"),
+                EndOffset = GetInt(el, "end_offset"),
+                Type = JsonHelper.GetString(el, "type"),
+                Position = GetInt(el, "position"),
+            });
+        }
+        return list;
+    }
+
+    /// <summary>
+    /// 解析索引模板 / 组件模板列表。两类响应结构一致：
+    /// <c>{ "&lt;name&gt;": { "index_patterns": [...], "composed_of": [...], "priority": n, "template": {...}, "_meta": {...} } }</c>
+    /// </summary>
+    public static List<EsTemplate> ParseTemplates(string json)
+    {
+        var list = new List<EsTemplate>();
+        using var doc = JsonDocument.Parse(json);
+        if (doc.RootElement.ValueKind != JsonValueKind.Object) return list;
+
+        foreach (var prop in doc.RootElement.EnumerateObject())
+        {
+            var el = prop.Value;
+            list.Add(new EsTemplate
+            {
+                Name = prop.Name,
+                IndexPatterns = JoinStringArray(el, "index_patterns"),
+                ComposedOf = JoinStringArray(el, "composed_of"),
+                Priority = el.TryGetProperty("priority", out var pr) && pr.ValueKind == JsonValueKind.Number
+                    ? pr.GetInt32().ToString()
+                    : "",
+                Version = el.TryGetProperty("version", out var v) && v.ValueKind == JsonValueKind.Number
+                    ? v.GetInt64().ToString()
+                    : "",
+                BodyJson = JsonHelper.Pretty(prop.Value.GetRawText()),
+            });
+        }
+        return list.OrderBy(x => x.Name, StringComparer.Ordinal).ToList();
+    }
+
+    /// <summary>解析字段 Top 值聚合（terms + cardinality）。</summary>
+    public static FieldTopValuesResult ParseFieldTopValues(string json)
+    {
+        var result = new FieldTopValuesResult();
+        using var doc = JsonDocument.Parse(json);
+
+        // ES 在字段不存在/不可聚合时返回 error 结构
+        if (doc.RootElement.TryGetProperty("error", out var err))
+        {
+            result.Error = err.ValueKind == JsonValueKind.Object
+                ? JsonHelper.GetString(err, "reason", err.GetRawText())
+                : err.GetRawText();
+            return result;
+        }
+
+        if (!doc.RootElement.TryGetProperty("aggregations", out var aggs) ||
+            aggs.ValueKind != JsonValueKind.Object)
+            return result;
+
+        if (aggs.TryGetProperty("distinct_count", out var dc) &&
+            dc.ValueKind == JsonValueKind.Object &&
+            dc.TryGetProperty("value", out var dcv) && dcv.ValueKind == JsonValueKind.Number)
+            result.DistinctCount = dcv.GetInt64();
+
+        if (aggs.TryGetProperty("top_values", out var tv) &&
+            tv.ValueKind == JsonValueKind.Object &&
+            tv.TryGetProperty("buckets", out var buckets) &&
+            buckets.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var b in buckets.EnumerateArray())
+            {
+                // key 可能是字符串或数字（数值字段聚合）
+                string key = b.TryGetProperty("key_as_string", out var kas)
+                    ? kas.GetString() ?? ""
+                    : b.TryGetProperty("key", out var k)
+                        ? k.ValueKind == JsonValueKind.String ? k.GetString() ?? "" : k.ToString()
+                        : "";
+                long count = b.TryGetProperty("doc_count", out var c) && c.ValueKind == JsonValueKind.Number
+                    ? c.GetInt64()
+                    : 0;
+                result.Values.Add(new FieldTopValue { Value = key, Count = count });
+            }
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// 解析别名查询响应。兼容两种形态：
+    /// ① <c>GET /{index}/_alias</c>：<c>{ "&lt;index&gt;": { "aliases": { "&lt;alias&gt;": {...} } } }</c>
+    /// ② <c>GET /_alias</c>：结构与①相同，只是索引可能多个。
+    /// </summary>
+    public static List<EsAlias> ParseAliases(string json)
+    {
+        var list = new List<EsAlias>();
+        using var doc = JsonDocument.Parse(json);
+        if (doc.RootElement.ValueKind != JsonValueKind.Object) return list;
+
+        foreach (var indexProp in doc.RootElement.EnumerateObject())
+        {
+            if (indexProp.Value.ValueKind != JsonValueKind.Object) continue;
+            if (!indexProp.Value.TryGetProperty("aliases", out var aliases) ||
+                aliases.ValueKind != JsonValueKind.Object) continue;
+
+            foreach (var aliasProp in aliases.EnumerateObject())
+            {
+                var a = aliasProp.Value;
+                list.Add(new EsAlias
+                {
+                    Name = aliasProp.Name,
+                    Index = indexProp.Name,
+                    Filter = a.ValueKind == JsonValueKind.Object && a.TryGetProperty("filter", out var f)
+                        ? JsonHelper.Pretty(f.GetRawText())
+                        : "",
+                    Routing = a.ValueKind == JsonValueKind.Object
+                        ? JsonHelper.GetString(a, "index_routing",
+                            JsonHelper.GetString(a, "search_routing", JsonHelper.GetString(a, "routing")))
+                        : "",
+                });
+            }
+        }
+        return list.OrderBy(x => x.Index, StringComparer.Ordinal)
+                   .ThenBy(x => x.Name, StringComparer.Ordinal)
+                   .ToList();
+    }
+
+    private static string JoinStringArray(JsonElement el, string name)    {
+        if (!el.TryGetProperty(name, out var arr) || arr.ValueKind != JsonValueKind.Array) return "";
+        return string.Join(", ", arr.EnumerateArray()
+            .Where(x => x.ValueKind == JsonValueKind.String)
+            .Select(x => x.GetString()));
+    }
+
     private static int GetInt(JsonElement el, string name)
         => el.TryGetProperty(name, out var p) && p.ValueKind == JsonValueKind.Number ? p.GetInt32() : 0;
 

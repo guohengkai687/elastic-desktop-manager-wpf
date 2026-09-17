@@ -25,6 +25,10 @@ public static class Ui
 
     public static void ShowEsExamples() => new EsExamplesWindow { Owner = Main }.ShowDialog();
 
+    /// <summary>索引工具对话框（Mapping/Settings/别名/Top值/维护/迁移）。</summary>
+    public static void ShowIndexTools(string indexName)
+        => new IndexToolsWindow(indexName) { Owner = Main }.ShowDialog();
+
     // ---------- 消息 ----------
     public static void Error(Window? owner, string message)
         => MessageBox.Show(owner ?? Main, message, Localization.L("common.error"), MessageBoxButton.OK, MessageBoxImage.Error);

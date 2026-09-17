@@ -1,22 +1,120 @@
-# TASKS.md — 任务拆解（WPF 移植）
+# TASKS — 拆解与状态
 
-状态：⏳ 进行中 / ✅ 完成 / ⬜ 待办
+> 状态：`TODO` / `DOING` / `DONE` / `CUT`（裁剪必须写明理由，并在 QA.md 复述）
+> 每个 T 都是**独立可验证**的：做完就能跑一个命令给出证据。
 
-| # | 任务 | 状态 |
+## 阶段 0：基线与护栏
+
+| ID | 任务 | 状态 | 验证 |
+|---|---|---|---|
+| T0.1 | 记录基线：build / 单测 48 / guard 3 | DONE | 已有记录 |
+| T0.2 | 修复或确认 binding-guard 对本轮新增 XAML 的覆盖 | DONE | guard 全绿 |
+
+## 阶段 1：Core 能力层（无损、可单测，先行）
+
+> 全部在 `ElasticDesktopManager.Core`，**不引入任何 WPF 依赖**（AC12）。
+
+| ID | 任务 | 对应 | 状态 | 验证 |
+|---|---|---|---|---|
+| T1.1 | `EsClient` 新增集群指标：`GetNodeStatsAsync()` → `GET /_nodes/stats` | A1 | DONE | 单测断言路径 |
+| T1.2 | `EsClient` 新增分词：`AnalyzeTextAsync(index, field, analyzer, text)` → `POST /{index}/_analyze` | A3 | DONE | 单测断言路径+body |
+| T1.3 | `EsClient` 新增 Mapping：`GetMappingAsync(index)` / `PutMappingAsync(index, json)` | A2 | DONE | 单测 |
+| T1.4 | `EsClient` 新增 Settings：`GetSettingsAsync(index)` / `PutSettingsAsync(index, json)` | A2 | DONE | 单测 |
+| T1.5 | `EsClient` 新增别名：`GetAliasesAsync` / `AddAliasAsync(alias, filter, routing)` / `RemoveAliasAsync` | A5 | DONE | 单测 |
+| T1.6 | `EsClient` 新增 `ReindexAsync(source, dest, query)` → `POST /_reindex` | A6 | DONE | 单测 |
+| T1.7 | `EsClient` 新增 `ForceMergeAsync(index)` → `POST /{index}/_forcemerge` | A9 | DONE | 单测 |
+| T1.8 | `EsClient` 新增模板：`GetTemplatesAsync` / `GetComponentTemplatesAsync` / `DeleteTemplateAsync` / `CreateTemplateAsync` | A7 | DONE | 单测 |
+| T1.9 | `EsClient` 新增诊断：`ExplainAllocationAsync` / `HotThreadsAsync` / `ThreadPoolAsync` / `PendingTasksAsync` | A8 | DONE | 单测 |
+| T1.10 | `EsClient` 新增字段 Top 值：`FieldTopValuesAsync(index, field, size)` → terms + cardinality | A4 | DONE | 单测 |
+| T1.11 | 新增 `EsMetricsFlattener`（纯函数）：嵌套 JSON → 分组指标行；值格式化（bytes/ms/percent） | A1/AC2 | DONE | 单测 ≥6 例 |
+| T1.12 | 路径合法性回归：所有新路径无 `//`、无漏 `/` | AC3 | DONE | 单测 |
+
+## 阶段 2：设计令牌与主题（UI 地基）
+
+> 先立地基，再改页面——否则页面会各写各的硬编码色值（AC7 会挂）。
+
+| ID | 任务 | 对应 | 状态 | 验证 |
+|---|---|---|---|---|
+| T2.1 | 重写 `Themes/Dark.xaml`：完整语义色板（surface 分层 / border / text 分层 / accent / 语义色 / overlay） | B1/B7 | DONE | build |
+| T2.2 | 重写 `Themes/Light.xaml`：与 Dark **同 key 全集** | B1/B7 | DONE | build + key 对齐检查 |
+| T2.3 | 新增 `Themes/Tokens.xaml`：spacing / radius / fontSize / shadow 几何令牌（StaticResource） | B1 | DONE | build |
+| T2.4 | 重写 `Themes/Common.xaml`：全套控件模板 + hover/focus/disabled 三态 | B4/AC5 | DONE | build |
+| T2.5 | 主题字典合并顺序与运行时切换验证（换主题不崩、无缺失 key） | B7 | DONE | 静态检查 key 覆盖 |
+
+## 阶段 3：壳层与导航（B2/B3/B6）
+
+| ID | 任务 | 对应 | 状态 | 验证 |
+|---|---|---|---|---|
+| T3.1 | `NavItem` 增加 `Glyph`（图标）；保持 `Code`/`TitleKey`/`Title` 契约不变 | B2 | DONE | Core 单测 |
+| T3.2 | `MainWindow` 顶栏精修：品牌区 / 连接选择器 / 图标按钮统一尺寸与悬停 | B3 | DONE | build |
+| T3.3 | 左侧导航改为图标+文字，选中态左侧强调指示条 | B2/AC6 | DONE | guard + 人工核对清单 |
+| T3.4 | 状态栏 + Toast 精修（圆角/阴影/图标） | B5 | DONE | build |
+| T3.5 | `ConnectionView` 改卡片式列表 | B6 | **未做**（保留文件夹层级，避免丢失树形语义） | — |
+
+## 阶段 4：新页面与功能接线
+
+| ID | 任务 | 对应 | 状态 | 验证 |
+|---|---|---|---|---|
+| T4.1 | 新增「指标」页（VM + View + 导航项 + i18n），可折叠分组 | A1 | DONE | guard + 单测 |
+| T4.2 | 新增「诊断」页：分片分配解释 / 热点线程 / 线程池 / 挂起任务（页签） | A8 | DONE | guard |
+| T4.3 | 新增「模板」页：索引模板 / 组件模板 查看与删除 | A7 | DONE | guard |
+| T4.4 | 新增「分词」工具：文本 + 分词器 → token 列表 | A3 | DONE | guard |
+| T4.5 | 索引页扩展：Mapping/Settings 查看与更新 | A2 | DONE | guard |
+| T4.6 | 索引页扩展：别名管理（增/删/带 filter·routing） | A5 | DONE | guard |
+| T4.7 | 索引页扩展：Force Merge 操作 | A9 | DONE | guard |
+| T4.8 | 索引页扩展：字段 Top 值查看 | A4 | DONE | guard |
+| T4.9 | 工具入口：Reindex 数据迁移 | A6 | DONE | guard |
+| T4.10 | 索引数据导出 JSON（带 DSL 过滤） | A10 | **未做**（Core 未实现） | — |
+| T4.11 | 批量导入（本地 JSON → `_bulk`） | A10 | **未做**（Core 未实现） | — |
+
+## 阶段 5：既有页面视觉统一（B3/B5）
+
+| ID | 任务 | 状态 | 验证 |
+|---|---|---|---|
+| T5.1 | 统一页面标题区（标题+副标题+操作区）到所有页面 | DONE | guard |
+| T5.2 | 空态/加载态/错误态视觉统一 | DONE | guard |
+| T5.3 | DataGrid / 表格精修（行高、悬停、选中、表头） | DONE | build |
+| T5.4 | 各页面硬编码色值清理 → DynamicResource（AC7） | DONE | guard 新规则 |
+
+## 阶段 6：i18n 与测试护栏
+
+| ID | 任务 | 状态 | 验证 |
+|---|---|---|---|
+| T6.1 | 新增词条（zh/en 成对），保持严格对齐 | DONE | guard |
+| T6.2 | binding-guard 新增规则：zh/en **词条数量相等** | DONE | guard |
+| T6.3 | binding-guard 新增规则：XAML 无硬编码 hex 颜色 | DONE | guard + 自检 |
+| T6.4 | binding-guard 新增自检：上述两条规则**能真的失败**（喂违规样本） | DONE | guard |
+| T6.5 | Core 单测补齐 A1–A10（AC1/AC2/AC3） | DONE | 单测 |
+
+## 阶段 7：文档
+
+| ID | 任务 | 状态 |
 |---|---|---|
-| 1 | 解决方案骨架（sln + Core + WPF + Tests），Linux 下 WPF 可编译 | ✅ |
-| 2 | Core: 模型（ConfigProperty/SettingProperty/ES 模型） | ✅ |
-| 3 | Core: EsClient（SSL/跳过验证/认证/超时/全部 ES 调用） | ✅ |
-| 4 | Core: 存储服务（config/settings/history JSON）+ EDM_DATA_DIR | ✅ |
-| 5 | Core: i18n（zh-CN/en）与 JsonHelper | ✅ |
-| 6 | UI: App/主题（Light/Dark）/MainWindow 外壳/导航/加载条 | ✅ |
-| 7 | UI: 连接管理（树+增删改+测试连接+表单含 SSL 开关） | ✅ |
-| 8 | UI: 首页健康 / 节点 / 分片 | ✅ |
-| 9 | UI: 索引（分页/搜索/操作菜单/详情弹窗） | ✅ |
-| 10 | UI: REST 控制台 + 历史 | ✅ |
-| 11 | UI: SQL（游标分页/表格 JSON/CSV 导出） | ✅ |
-| 12 | UI: 搜索（构建器/DSL/结果/update-delete by query） | ✅ |
-| 13 | UI: 设置 / 关于 | ✅ |
-| 14 | Tests: 核心逻辑单测（27/27 通过，Linux） | ✅ |
-| 15 | 全量构建修复 + 审查子代理 + blocker 修复 | ✅ 审查完成，P0/P1 全修复，P2 高优 9 项 + 回归测试 |
-| 16 | README / 交付 | ✅ |
+| T7.1 | README：新功能表 + UI 说明 + Windows 人工核对清单 | DONE |
+| T7.2 | `docs/team/` 全部产物归档 | DONE |
+
+## 门禁
+
+- **G1**（阶段 1 后）：Core 单测全绿且总数 ≥48；Core 无 WPF 依赖。
+- **G2**（阶段 2 后）：build 0/0；Dark/Light key 全集一致；Common.xaml 控件三态齐备。
+- **G3**（阶段 4 后）：guard 全绿（含新规则）；所有新页面走 DynamicResource。
+- **G4**（交付前）：build 0 警告 0 错误 + 单测全绿 + guard 全绿；REVIEW 无未处置 blocker。
+
+---
+
+## 最终结果（本轮）
+
+- **已完成 43 项**：阶段 0–2 全部；阶段 3 除 T3.5；阶段 4 的 T4.1–T4.9；阶段 5 全部；阶段 6 全部；阶段 7 全部。
+- **未完成 3 项**（已在 ARCHITECTURE.md 与 QA.md 如实声明，未掩饰为已完成）：
+  - T3.5 连接页卡片化（B6）—— 现为树形列表，保留文件夹层级语义。
+  - T4.10 / T4.11 导出与导入（A10）—— Core 未实现。
+- **门禁**：G1 ✅（Core 单测 99 全绿、Core 无 WPF 依赖）；G2 ✅（build 0/0、Dark/Light key 一致、控件三态齐备）；
+  G3 ✅（守卫 8/8 含新规则）；G4 ✅（build 0/0 + 单测 99/99 + 守卫 8/8，REVIEW 无未处置 blocker）。
+
+## 期间新增的守卫任务（原计划外，因发现真实缺陷而补）
+
+| ID | 任务 | 状态 | 触发原因 |
+|---|---|---|---|
+| T6.6 | 守卫规则：引用的资源 key 必须已定义 | DONE | 发现 `FindResource("TextBrush")` 缺失会导致运行期崩溃 |
+| T6.7 | 守卫自检三方向（required 识别 / 同名不误报 / 唯一只读仍抓） | DONE | 守卫类型盲查找产生误报，需防"改废守卫" |
+| T6.8 | 守卫规则：Dark/Light 颜色 key 一致 | DONE | 缺 key 会导致该主题下元素静默不可见 |
