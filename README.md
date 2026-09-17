@@ -23,6 +23,22 @@
 
 进入 **节点 / 分片 / 索引** 等页面时会自动刷新一次数据（静默模式：不占全局忙碌条、失败不弹模态错误框，避免多页同时刷新时刷屏）；手动「刷新」按钮仍会显示忙碌与错误提示。连接建立或断开时，所有已打开的页面会同步刷新连接状态。
 
+## SQL 查询页使用说明
+
+页面顶部有可折叠的「使用说明」，此处为同样内容的文字版：
+
+1. 在输入框写标准 SQL（Elasticsearch SQL 语法），例如：
+   ```sql
+   SELECT * FROM record_secu LIMIT 20
+   SELECT name, age FROM users WHERE age > 30 ORDER BY age
+   SELECT COUNT(*) FROM my-index
+   ```
+2. **每批行数**对应 Elasticsearch 的 `fetch_size`，即每次从集群取回多少行（游标分页）。
+3. 点 **执行** 返回首批结果；结果超出一页时用 **下一页** 沿游标继续读取后续批次。
+4. **上一页** 会先关闭当前游标，再从第一页重新查询（ES 游标只能向前，无法真正回退）。
+5. **导出 CSV** 把当前已读取到的行导出为 CSV（带 UTF-8 BOM，Excel 可直接打开）。
+6. 结果有「表格」与「JSON」两个页签；聚合类查询的完整结构请查看 JSON 页签。
+
 ## SSL 支持与“跳过 SSL 验证”
 
 - **SSL 支持**：新建/编辑连接时可选择协议 **HTTP** 或 **HTTPS（SSL）**；地址也可直接填写完整 URL（`https://es.example.com:9200`），客户端按 `scheme://host:port/` 规整基址。

@@ -130,6 +130,27 @@ Check("守卫自身有效性：能识别 private set 与表达式体属性为只
     if (!IsReadOnlyProperty(sample, "D")) throw new Exception("未识别多行 private set 为只读");
 });
 
+// ---- i18n 中英文词条一致性 ----
+Check("i18n：zh_CN 与 en 词条完全对齐（无单边缺失）", () =>
+{
+    string locFile = Path.Combine(repoRoot, "src", "ElasticDesktopManager.Core", "I18n", "Localization.cs");
+    string src = File.ReadAllText(locFile);
+    int zhStart = src.IndexOf("Dictionary<string, string> Zh", StringComparison.Ordinal);
+    int enStart = src.IndexOf("Dictionary<string, string> En", StringComparison.Ordinal);
+    if (zhStart < 0 || enStart < 0 || enStart < zhStart)
+        throw new Exception("未能定位 Zh / En 词典声明");
+
+    static HashSet<string> Keys(string block) =>
+        Regex.Matches(block, @"\[""([^""]+)""\]\s*=").Select(m => m.Groups[1].Value).ToHashSet();
+
+    var zh = Keys(src[zhStart..enStart]);
+    var en = Keys(src[enStart..]);
+    var onlyZh = zh.Except(en).OrderBy(x => x).ToList();
+    var onlyEn = en.Except(zh).OrderBy(x => x).ToList();
+    if (onlyZh.Count > 0 || onlyEn.Count > 0)
+        throw new Exception($"仅中文有: [{string.Join(", ", onlyZh)}]；仅英文有: [{string.Join(", ", onlyEn)}]");
+});
+
 
 Console.WriteLine();
 Console.WriteLine($"===== 结果：通过 {passed}，失败 {failed} =====");

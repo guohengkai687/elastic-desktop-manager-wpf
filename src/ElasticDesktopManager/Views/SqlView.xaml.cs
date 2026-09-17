@@ -26,6 +26,8 @@ public partial class SqlView : UserControl
             TabTableHeader.Text = Localization.L("sql.tab.table");
             TabJsonHeader.Text = Localization.L("sql.tab.json");
             NoDataHint.Text = Localization.L("sql.noData");
+            HelpTitle.Text = Localization.L("sql.help.title");
+            HelpBody.Text = Localization.L("sql.help.body");
 
             if (_vm is not null)
                 _vm.StructureChanged += RebuildColumns;

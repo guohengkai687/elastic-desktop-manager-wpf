@@ -12,7 +12,7 @@ public class SqlViewModel : PageViewModelBase
 {
     public List<int> FetchSizes { get; } = new() { 50, 100, 200, 500, 1000 };
 
-    private string _queryText = "";
+    private string _queryText = "SELECT * FROM index_name LIMIT 10";
     public string QueryText
     {
         get => _queryText;

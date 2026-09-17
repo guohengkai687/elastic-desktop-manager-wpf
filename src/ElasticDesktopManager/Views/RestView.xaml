@@ -6,8 +6,10 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-            <RowDefinition Height="7*" />
+            <!-- 请求体：固定较高高度（原来只有约一行，无法编辑多行 JSON） -->
+            <RowDefinition Height="2*" MinHeight="200" />
+            <!-- 响应结果：占剩余空间 -->
+            <RowDefinition Height="3*" MinHeight="160" />
         </Grid.RowDefinitions>
 
         <!-- 标题与工具栏 -->
@@ -51,6 +53,7 @@
                          VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
                          BorderThickness="0" Background="Transparent"
                          FontFamily="Consolas, Courier New" FontSize="12"
+                         VerticalContentAlignment="Top" Padding="6,4"
                          Text="{Binding Body, UpdateSourceTrigger=PropertyChanged}" />
             </Grid>
         </Border>

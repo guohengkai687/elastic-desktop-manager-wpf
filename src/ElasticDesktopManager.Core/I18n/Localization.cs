@@ -190,6 +190,8 @@ public static class Localization
         ["sql.page"] = "第 {0} 页",
         ["sql.noData"] = "执行 SQL 后在此显示结果",
         ["sql.export.success"] = "CSV 已导出",
+        ["sql.help.title"] = "使用说明",
+        ["sql.help.body"] = "1) 在下方输入 SQL，用标准写法：SELECT * FROM 索引名 WHERE 条件 LIMIT 条数\n2) 「每批行数」= fetch_size，决定每次从集群取多少行（游标分页）。\n3) 点「执行」返回首批结果；结果超出一页时用「下一页」继续读取后续批次。\n4) 「上一页」会结束当前游标并从第一页重新开始（Elasticsearch 游标只能向前）。\n5) 「导出 CSV」把已读取到的行导出为 CSV（Excel 可直接打开）。\n\n示例：\n  SELECT * FROM record_secu LIMIT 20\n  SELECT name, age FROM users WHERE age > 30 ORDER BY age\n  SELECT COUNT(*) FROM my-index",
 
         // 搜索
         ["search.index"] = "索引",
@@ -388,6 +390,7 @@ public static class Localization
         ["shard.table.ip"] = "IP",
         ["shard.table.node"] = "Node",
         ["shard.summary"] = "Shard summary",
+        ["shard.state.healthy"] = "Healthy",
 
         ["rest.method"] = "Method",
         ["rest.path"] = "Path",
@@ -416,6 +419,8 @@ public static class Localization
         ["sql.page"] = "Page {0}",
         ["sql.noData"] = "Run a SQL query to see results here",
         ["sql.export.success"] = "CSV exported",
+        ["sql.help.title"] = "How to use",
+        ["sql.help.body"] = "1) Type standard SQL below: SELECT * FROM index WHERE cond LIMIT n\n2) \"Fetch size\" sets fetch_size, i.e. rows per batch (cursor paging).\n3) Click Run for the first batch; use Next to read further batches.\n4) Prev closes the cursor and restarts from page 1 (Elasticsearch cursors are forward-only).\n5) Export CSV writes the rows fetched so far (opens in Excel).\n\nExamples:\n  SELECT * FROM record_secu LIMIT 20\n  SELECT name, age FROM users WHERE age > 30 ORDER BY age\n  SELECT COUNT(*) FROM my-index",
 
         ["search.index"] = "Index",
         ["search.timeout"] = "Timeout (sec)",
@@ -441,6 +446,7 @@ public static class Localization
         ["search.update.needScript"] = "Update by query requires a Painless script first, e.g.: ctx._source['field'] = 'value'",
         ["search.script"] = "Update script (Painless)",
         ["search.builder.empty"] = "No conditions — will match all documents",
+        ["search.agg.note"] = "See the JSON tab for aggregation results",
 
         ["setting.title"] = "Settings",
         ["setting.language"] = "Language",

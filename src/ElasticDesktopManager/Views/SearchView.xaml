@@ -6,19 +6,20 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- 头部：索引/超时/选项/动作 -->
+        <!-- 头部：标题 + 参数 -->
         <Grid Margin="0,0,0,10" Visibility="{Binding HasConnection, Converter={StaticResource BoolToVisibility}}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="110" />
+                <ColumnDefinition Width="*" MinWidth="160" />
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <TextBlock x:Name="TitleText" Style="{StaticResource PageTitleStyle}" />
+            <TextBlock x:Name="TitleText" Style="{StaticResource PageTitleStyle}" VerticalAlignment="Center" />
             <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center">
                 <TextBlock x:Name="IndexLabel" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" />
                 <ComboBox ItemsSource="{Binding Indices}" SelectedItem="{Binding SelectedIndex}" Margin="0,3,0,0" />
@@ -30,31 +31,44 @@
             </StackPanel>
             <CheckBox Grid.Column="3" x:Name="TrackCheck" VerticalAlignment="Center" Margin="18,0,0,0"
                       IsChecked="{Binding TrackTotalHits}" />
-            <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
-                <Button x:Name="UpdateButton" Margin="0,0,8,0" Click="OnUpdate" />
-                <Button x:Name="DeleteButton" Style="{StaticResource DangerButtonStyle}" Margin="0,0,8,0"
-                        Click="OnDelete" />
-                <Button x:Name="DslButton" Margin="0,0,8,0" Click="OnShowDsl" />
-                <Button x:Name="RunButton" Style="{StaticResource AccentButtonStyle}" Width="92" Click="OnRun" />
-            </StackPanel>
         </Grid>
 
+        <!-- 操作按钮：独立一行，避免与参数挤在一起 -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,10"
+                    Visibility="{Binding HasConnection, Converter={StaticResource BoolToVisibility}}">
+            <Button x:Name="RunButton" Style="{StaticResource AccentButtonStyle}" Width="110" Click="OnRun" />
+            <Button x:Name="DslButton" Margin="8,0,0,0" Click="OnShowDsl" />
+            <Button x:Name="UpdateButton" Margin="8,0,0,0" Click="OnUpdate" />
+            <Button x:Name="DeleteButton" Style="{StaticResource DangerButtonStyle}" Margin="8,0,0,0"
+                    Click="OnDelete" />
+        </StackPanel>
+
         <!-- 条件构建器 -->
-        <Border Grid.Row="1" Style="{StaticResource CardStyle}" Padding="0" Margin="0,0,0,10"
+        <Border Grid.Row="2" Style="{StaticResource CardStyle}" Padding="0" Margin="0,0,0,10"
                 Visibility="{Binding HasConnection, Converter={StaticResource BoolToVisibility}}">
             <Grid>
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="30" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
-                <StackPanel Orientation="Horizontal" Margin="10,5">
-                    <TextBlock x:Name="BuilderTitle" FontSize="11" VerticalAlignment="Center"
-                               Foreground="{DynamicResource TextSecondaryBrush}" />
-                    <Button x:Name="AddConditionButton" Margin="14,0,0,0" Padding="8,1"
-                            FontSize="11" Click="OnAddCondition" />
-                </StackPanel>
+                <!-- 列头 + 新增条件 -->
+                <Grid Margin="10,6,10,2">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="90" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="110" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="34" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="BuilderTitle" Grid.ColumnSpan="2" FontSize="11"
+                               VerticalAlignment="Center" Foreground="{DynamicResource TextSecondaryBrush}" />
+                    <Button x:Name="AddConditionButton" Grid.Column="2" Grid.ColumnSpan="3"
+                            HorizontalAlignment="Right" Padding="8,1" FontSize="11" Click="OnAddCondition" />
+                </Grid>
+                <!-- 条件行 -->
                 <ScrollViewer Grid.Row="1" MaxHeight="150" VerticalScrollBarVisibility="Auto">
-                    <ItemsControl ItemsSource="{Binding Conditions}" Margin="10,2,10,10">
+                    <ItemsControl ItemsSource="{Binding Conditions}" Margin="10,2,10,6">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
                                 <Grid Margin="0,3">
@@ -85,15 +99,15 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
                 </ScrollViewer>
-                <!-- 更新脚本（“按查询更新”必填） -->
-                <Grid>
+                <!-- 更新脚本（“按查询更新”必填）：独占一行，避免与条件列表重叠 -->
+                <Grid Grid.Row="2" Margin="10,0,10,10">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock x:Name="ScriptLabel" Margin="10,0,8,0" VerticalAlignment="Center" FontSize="11"
+                    <TextBlock x:Name="ScriptLabel" Margin="0,0,8,0" VerticalAlignment="Center" FontSize="11"
                                Foreground="{DynamicResource TextSecondaryBrush}" />
-                    <TextBox Grid.Column="1" Margin="0,0,10,8" VerticalContentAlignment="Center"
+                    <TextBox Grid.Column="1" VerticalContentAlignment="Center" Padding="4,3"
                              FontFamily="Consolas, Courier New" FontSize="12"
                              Text="{Binding UpdateScript, UpdateSourceTrigger=PropertyChanged}" />
                 </Grid>
@@ -101,7 +115,7 @@
         </Border>
 
         <!-- 结果 -->
-        <Grid Grid.Row="2" Visibility="{Binding HasConnection, Converter={StaticResource BoolToVisibility}}">
+        <Grid Grid.Row="3" Visibility="{Binding HasConnection, Converter={StaticResource BoolToVisibility}}">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
@@ -133,6 +147,6 @@
             </TabControl>
         </Grid>
 
-        <views:EmptyStateView Grid.Row="2" Visibility="{Binding HasConnection, Converter={StaticResource InverseBoolToVisibility}}" />
+        <views:EmptyStateView Grid.Row="3" Visibility="{Binding HasConnection, Converter={StaticResource InverseBoolToVisibility}}" />
     </Grid>
 </UserControl>
