@@ -106,7 +106,7 @@
 | **P2-12** 健康轮询不随可见性暂停 | 修复：`HealthViewModel.Active` + 视图 Loaded/Unloaded 切换，不可见时停表 | 代码核验 |
 | **P2-13** 删除当前连接不断开 | 修复：`ConnectionsViewModel.Delete` 删除当前连接时联动 `EsSession.Disconnect()` + 通知 | 代码核验 |
 | **P2-14** async void Execute | 说明：轻量命令库取舍，异常汇入 DispatcherUnhandledException（弹窗不崩溃），维持现状 | 文档 |
-| **P2-15** 仓库卫生 | 修复：清除字面量 `$(MSBuildThisFileDirectory).packages` 残留目录；`nuget.config` 移除不可展开的 MSBuild 属性；`git init` + 首次提交 | `git log` 92d1646 |
+| **P2-15** 仓库卫生 | 修复：清除字面量 `$(MSBuildThisFileDirectory).packages` 残留目录；`nuget.config` 移除不可展开的 MSBuild 属性；`git init` + 首次提交 | `git log` 9c8cc54 |
 | **P2-16** 保留 API 标注 | 修复：EsClient 未接入 UI 的方法添加「保留 API」注释 | 代码核验 |
 
 复验基线：`dotnet build ElasticDesktopManager.sln` → **0 Warning 0 Error**；`dotnet run --project tests/ElasticDesktopManager.Tests -c Release` → **36/36 通过**（新增 9 项回归测试：P0-1 ×4、P2-6、P2-7 ×2、P2-9、i18n ×1）。

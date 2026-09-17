@@ -72,7 +72,7 @@
 
 ---
 
-# 第 4 轮审查（提交 8d41960 / 657cbbf / c5d0151）
+# 第 4 轮审查（提交 835e3a1 / 666f096 / ed9ebce）
 
 审查者：**独立子代理**（只读，不改文件，anti-pattern 式对抗排查）+ 主代理自查。
 范围：深色背景 / 索引下拉 / 快照五列表三项修复，以及本轮新增的守卫规则。
@@ -81,7 +81,7 @@
 
 | # | 审查意见 | 核实结果 | 处置 |
 |---|---|---|---|
-| B1 | 重写 `SnapshotView.xaml.cs` 时丢了父提交里的 `Localization.LanguageChanged += ApplyTexts`，页面被 MainViewModel 缓存 → 切语言时整页 chrome 停旧语言、VM 状态行已切新语言（中英混排） | **成立**（`git show 8d41960^:.../SnapshotView.xaml.cs` 确认原文件第 15 行有此订阅） | 已恢复订阅；并把 VM 的语言切换改为 `RelocalizeStatuses()` |
+| B1 | 重写 `SnapshotView.xaml.cs` 时丢了父提交里的 `Localization.LanguageChanged += ApplyTexts`，页面被 MainViewModel 缓存 → 切语言时整页 chrome 停旧语言、VM 状态行已切新语言（中英混排） | **成立**（`git show 835e3a1^:.../SnapshotView.xaml.cs` 确认原文件第 15 行有此订阅） | 已恢复订阅；并把 VM 的语言切换改为 `RelocalizeStatuses()` |
 | B2 | 五个页签共用 `IsFormOpen`/`ToggleFormCommand`：在"仓库"页签点新建会把另外三个表单一起展开 | **成立** | 拆成 4 个 bool + 带 `CommandParameter` 的 `ToggleFormCommand`；XAML 8 处绑定同步更新 |
 | B3 | `ComboTemplateHasEditableBox` 不可靠：`Contains` 一路搜到文件尾、只认字面量 `IsEditable="True"` | **成立** | 重写为 `XDocument` 解析：限定 ComboBox 模板自己的**名字域**（排除嵌套 ToggleButton 模板）、注释天然不算、`IsEditable` 识别放宽并排除显式 False；自检新增 3 个方向（注释/子模板/后面的模板） |
 | B4 | `LoadDictionary` 把 Zh+En 合成一个 key 集合，而"唯一跨词典规则只比数量" → 等量但不同 key 的词典会全过 | **不成立** | 守卫第 171 行 `i18n：zh_CN 与 en 词条完全对齐（无单边缺失）` 已经在做 `zh.Except(en)` / `en.Except(zh)` 集合差比对（`Program.cs:185-188`）。审查者漏看了这条已有规则 |
@@ -95,7 +95,7 @@
 | 意见 | 处置 |
 |---|---|
 | Restore/Slm/Ilm 三条状态行不随语言切换 | 已修：抽出 `Update*Status()`，语言切换时 `RelocalizeStatuses()` 重算五条 |
-| `657cbbf` 去掉"错误态提前返回"后，语言切换会把 ES 错误文案覆盖成成功文案 | 已修：语言切换只重写**成功文案**，`IsError` 为真时保留 ES 原文（原文不需要翻译） |
+| `666f096` 去掉"错误态提前返回"后，语言切换会把 ES 错误文案覆盖成成功文案 | 已修：语言切换只重写**成功文案**，`IsError` 为真时保留 ES 原文（原文不需要翻译） |
 | `HostOf`：`type=SNAPSHOT` 的 `source` 没有 host/name → 恢复页"来源"列在主场景恒空 | 已修：回退到 `repository/snapshot`；补测试（第 3 个分片样本） |
 | `ParseRecovery` 缺 `ValueKind` 判断，根成员非对象时会抛 | 已修：补 `prop.Value.ValueKind != JsonValueKind.Object → continue` |
 | `RetentionText`/`Indices` 解析了却没有列显示；`PhaseCount`/`IsFailed`/`IsDone` 无人使用 | 已修：SLM 表格新增"保留"列（并收紧列宽）；恢复状态圆点改用 `IsDone`；删除 `PhaseCount`/`IsFailed`（本仓库不留死代码） |
@@ -122,10 +122,10 @@
 # 第 5 轮审查记录
 
 范围：用户截图缺陷（搜索页条件行两个下拉）+ 一份独立 Core/ES 复审报告。
-复审报告写于 `8d41960`，而当时 HEAD 已是 `2690d50` —— 很多意见**在报告写出前就已被 `2690d50` 修掉**。
+复审报告写于 `835e3a1`，而当时 HEAD 已是 `7a0b135` —— 很多意见**在报告写出前就已被 `7a0b135` 修掉**。
 按纪律逐条回代码核实，**不以报告的"Blocking"标签为准**。
 
-## 复审意见逐条核实（7 条成立、1 条不成立、10 条已在 `2690d50` 修掉）
+## 复审意见逐条核实（7 条成立、1 条不成立、10 条已在 `7a0b135` 修掉）
 
 ### 成立且本轮已修
 
@@ -141,9 +141,9 @@
 
 | # | 意见 | 核实结果 |
 |---|---|---|
-| C6 | 守卫 `ComboTemplateHasEditableBox` 不可靠（搜索到文件尾、只认字面量 `IsEditable="True"`） | **不成立**（第 5 轮的复审重复了上一轮 B3；该函数在 `2690d50` 已重写为 `XDocument` 名字域解析，并在 `840+` 行有注释/子模板/后续模板三个自检方向）。另外报告称"守卫的跨词典规则只比数量"同样是上一轮的 B4，`Program.cs:171` 已有集合差比对 |
+| C6 | 守卫 `ComboTemplateHasEditableBox` 不可靠（搜索到文件尾、只认字面量 `IsEditable="True"`） | **不成立**（第 5 轮的复审重复了上一轮 B3；该函数在 `7a0b135` 已重写为 `XDocument` 名字域解析，并在 `840+` 行有注释/子模板/后续模板三个自检方向）。另外报告称"守卫的跨词典规则只比数量"同样是上一轮的 B4，`Program.cs:171` 已有集合差比对 |
 
-### 已在 `2690d50` 修掉（报告基于 `8d41960`，属时间差）
+### 已在 `7a0b135` 修掉（报告基于 `835e3a1`，属时间差）
 
 - `SnapshotView.xaml.cs` 丢掉 `Localization.LanguageChanged` 订阅（本轮再次确认订阅在位）
 - 五页签共用 `IsFormOpen` / `ToggleFormCommand` → 已拆成 4 个独立 bool
@@ -219,9 +219,17 @@
 
 ## 第 7 轮（语言切换收尾：8 个缓存页面 + 文案唯一来源）
 
-审查范围：`9f6e0c0..工作区`（第 6 轮已登记、本轮修的 i18n 债务）。
+审查范围：`2b49f0d..工作区`（第 6 轮已登记、本轮修的 i18n 债务）。
 审查方式：**主代理自查 + 静态守卫**（子代理审查不可用，同前几轮的流程说明：审查独立性弱于有独立审查子代理的轮次，如实记录）。
 审查轴：标准轴（本仓库约定：分层、文案唯一来源、守卫、零警告）+ 规格轴（用户指令"接着把那 8 个页面的语言切换"）。
+
+> **发布说明（首次发布到 GitHub 时）**：本地 16 个提交原本的作者/提交者都是 `dev <dev@local>`，
+> 首次发布时按用户要求改为 `Hengkai.Guo <40817154+guohengkai687@users.noreply.github.com>`，
+> 用 `git filter-branch --env-filter` 重写了**全部历史** → **所有提交哈希都变了**。
+> 重写后逐条比对：**16 个提交的 message 完全一致、与原 ref 相比树内容 diff 为空**（只有作者身份变化）。
+> 本文档与 TASKS.md / archive 里引用的哈希已按映射同步为新哈希
+> （例：`8d41960`→`835e3a1`、`2690d50`→`7a0b135`、`9f6e0c0`→`2b49f0d`、`bc11ea0`→`042bf1a`）。
+> 若在别处（更早的对话或旧报告）看到旧哈希，属重写前的引用。
 
 ### 需求达成
 
