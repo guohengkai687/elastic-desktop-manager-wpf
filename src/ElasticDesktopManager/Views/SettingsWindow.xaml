@@ -1,0 +1,77 @@
+<Window x:Class="ElasticDesktopManager.Views.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Settings" Width="460" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False" ResizeMode="NoResize">
+    <StackPanel Margin="24,20,24,20">
+        <Grid Margin="0,0,0,14">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="130" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock x:Name="LanguageLabel" VerticalAlignment="Center" />
+            <ComboBox Grid.Column="1" ItemsSource="{Binding Languages}" SelectedValuePath="Code"
+                      DisplayMemberPath="Label" SelectedValue="{Binding Language}" />
+        </Grid>
+
+        <Grid Margin="0,0,0,14">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="130" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock x:Name="ThemeLabel" VerticalAlignment="Center" />
+            <ComboBox Grid.Column="1" ItemsSource="{Binding Themes}" SelectedValuePath="Code"
+                      SelectedValue="{Binding Theme}">
+                <ComboBox.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock>
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Text" Value="{Binding Code}" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Code}" Value="light">
+                                            <Setter Property="Text" Value="☀ 浅色 / Light" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Code}" Value="dark">
+                                            <Setter Property="Text" Value="☾ 深色 / Dark" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>
+        </Grid>
+
+        <CheckBox x:Name="AutoThemeCheck" Margin="0,0,0,14" IsChecked="{Binding AutoTheme}" />
+        <CheckBox x:Name="OpenDialogCheck" Margin="0,0,0,14" IsChecked="{Binding OpenDialog}" />
+
+        <Grid Margin="0,0,0,14">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="130" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock x:Name="TimeoutLabel" VerticalAlignment="Center" />
+            <TextBox Grid.Column="1" Width="90" HorizontalAlignment="Left" VerticalContentAlignment="Center"
+                     Text="{Binding Timeout, UpdateSourceTrigger=PropertyChanged}" />
+        </Grid>
+
+        <Grid Margin="0,0,0,14">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="130" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock x:Name="CloseLabel" VerticalAlignment="Center" />
+            <ComboBox Grid.Column="1" ItemsSource="{Binding CloseOptions}" SelectedValuePath="Code"
+                      SelectedValue="{Binding CloseBehavior}" />
+        </Grid>
+
+        <CheckBox x:Name="CloseRememberCheck" Margin="0,0,0,20" IsChecked="{Binding CloseRemember}" />
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button x:Name="CancelButton" Width="92" Margin="0,0,10,0" Click="OnCancel" />
+            <Button x:Name="SaveButton" Style="{StaticResource AccentButtonStyle}" Width="92" Click="OnSave" />
+        </StackPanel>
+    </StackPanel>
+</Window>

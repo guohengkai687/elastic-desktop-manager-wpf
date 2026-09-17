@@ -1,0 +1,16 @@
+# 构建产物
+bin/
+obj/
+*.user
+
+# 本地 NuGet 包缓存（nuget.config 指向仓库内）
+.packages/
+.nuget-http-cache/
+
+# IDE
+.vs/
+.vscode/
+.idea/
+
+# 运行时数据
+*.log

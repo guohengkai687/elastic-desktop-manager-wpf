@@ -1,0 +1,8 @@
+<Project>
+  <PropertyGroup>
+    <!-- 允许在非 Windows（本机 Linux）上编译 WPF 目标 -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <LangVersion>12.0</LangVersion>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+</Project>
