@@ -17,7 +17,7 @@ public class ConnectionTreeNode : ObservableObject
 
     public string Glyph => Item.IsFolder ? "📁" : "🖥";
     public string Name => Item.Name;
-    public string? ServerText => Item.IsFolder ? null : $"{Item.Scheme}://{Item.Servers}";
+    public string? ServerText => Item.IsFolder ? null : Item.DisplayServerUrl();
     public string? Badge => Item.IsFolder ? null : (Item.SkipSslVerify ? "⚠ SSL" : (Item.Scheme == "https" ? "🔒" : null));
     public bool IsFolder => Item.IsFolder;
 }

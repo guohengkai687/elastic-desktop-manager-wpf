@@ -27,6 +27,7 @@
         <!-- 连接树 -->
         <TreeView x:Name="Tree" Grid.Row="1" BorderThickness="1"
                   BorderBrush="{DynamicResource BorderBrush}" Background="{DynamicResource SurfaceBrush}"
+                  ItemsSource="{Binding Nodes}"
                   SelectedItemChanged="OnSelectedItemChanged"
                   MouseDoubleClick="OnTreeDoubleClick">
             <TreeView.ItemContainerStyle>

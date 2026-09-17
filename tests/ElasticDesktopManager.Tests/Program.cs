@@ -401,6 +401,46 @@ Test("BaseUrl: 含协议前缀的服务器地址展示不重复协议（P2-9 回
     Eq("https://es.example.com:9200", cfg.DisplayServerUrl(), "display url no double scheme");
 });
 
+Test("连接树显示文本：HTTPS+完整URL 不出现 https://https://（新增集群不显示回归）", () =>
+{
+    // 复现用户场景：协议选 HTTPS，地址栏填 https://192.168.5.18
+    // ConnectionTreeNode.ServerText 直接委托 DisplayServerUrl()，故此处校验该共享逻辑。
+    var cfg = new ConfigProperty { Name = "nls", Servers = "https://192.168.5.18", Scheme = "https" };
+    Eq("https://192.168.5.18", cfg.DisplayServerUrl(), "no doubled scheme");
+    True(!cfg.DisplayServerUrl().Contains("https://https://"), "must not double");
+});
+
+Test("连接树显示文本：纯 host:port 仍按所选协议补全", () =>
+{
+    Eq("https://192.168.5.18:9200",
+        new ConfigProperty { Servers = "192.168.5.18:9200", Scheme = "https" }.DisplayServerUrl(),
+        "bare host:port gets scheme");
+});
+
+Test("新增集群：保存后可被 Load 读回且能出现在树根（回归）", () =>
+{
+    string dir = Path.Combine(Path.GetTempPath(), "edm-save-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(dir);
+    var svc = new ConfigService(Path.Combine(dir, "config.json"));
+
+    var cfg = new ConfigProperty
+    {
+        Name = "nls", Servers = "https://192.168.5.18", Scheme = "https",
+        Security = true, Username = "nuctech", Password = "pwd",
+        SkipSslVerify = true, Type = "cluster", ParentId = ""
+    };
+    cfg.Id = ""; // 新建时 _item.Id 为空
+    svc.Upsert(cfg);
+    True(cfg.Id.Length > 0, "id assigned");
+
+    var all = svc.Load();
+    Eq("1", all.Count.ToString(), "one item persisted");
+    Eq("nls", all[0].Name, "name roundtrip");
+    Eq("true", all[0].SkipSslVerify.ToString().ToLowerInvariant(), "skipSsl roundtrip");
+    Eq("1", all.Count(x => string.IsNullOrEmpty(x.ParentId)).ToString(), "appears as tree root");
+    Directory.Delete(dir, true);
+});
+
 Test("请求: GET 携带请求体不被丢弃（P2-6 回归）", () =>
 {
     HttpRequestMessage? captured = null;
