@@ -74,7 +74,7 @@
                              VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
                              BorderThickness="0" Background="Transparent"
                              FontFamily="Consolas, Courier New" FontSize="12"
-                             Text="{Binding ResponseText}" />
+                             Text="{Binding ResponseText, Mode=OneWay}" />
                     <TextBlock x:Name="NoDataHint" Text="—" HorizontalAlignment="Center" VerticalAlignment="Center"
                                FontSize="13" Foreground="{DynamicResource DimTextBrush}"
                                IsHitTestVisible="False"

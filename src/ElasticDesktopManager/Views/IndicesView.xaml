@@ -20,7 +20,7 @@
             <TextBlock x:Name="TitleText" Style="{StaticResource PageTitleStyle}" />
             <TextBlock Grid.Column="1" x:Name="TotalText" VerticalAlignment="Center" Margin="16,0,0,0"
                        FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
-                       Text="{Binding TotalItems, StringFormat=Total: {0}}" />
+                       Text="{Binding TotalItems, Mode=OneWay, StringFormat=Total: {0}}" />
             <TextBox Grid.Column="2" Width="220" VerticalContentAlignment="Center"
                      Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}" />
             <Button Grid.Column="3" Margin="8,0,0,0" Style="{StaticResource IconButtonStyle}"
@@ -75,7 +75,7 @@
                 <Button x:Name="PrevButton" Content="‹ 上一页" Margin="0,0,8,0" Command="{Binding PrevCommand}"
                         IsEnabled="{Binding CanPrev}" />
                 <TextBlock x:Name="PageInfoText" VerticalAlignment="Center" Margin="0,0,8,0"
-                           Text="{Binding PageInfoText}" />
+                           Text="{Binding PageInfoText, Mode=OneWay}" />
                 <Button x:Name="NextButton" Content="下一页 ›" Command="{Binding NextCommand}"
                         IsEnabled="{Binding CanNext}" />
             </StackPanel>

@@ -146,9 +146,13 @@ public class MainViewModel : ObservableObject
             : $"{cfg.Name}  ({cfg.DisplayServerUrl()})";
         UpdateStatusText();
 
-        if (_selectedNav is not null && GetPage(_selectedNav.Code) is IReloadablePage reloadable)
-            _ = reloadable.ReloadAsync();
-    }
+        // 已创建的页面都要同步连接状态（空态切换）并在已连接时刷新一次数据。
+        // 之前只刷新“当前页”，导致其余已缓存页面停留在旧状态（如首页仍显示未连接、搜索页索引下拉为空）。
+        foreach (var page in _pages.Values)
+        {
+            if (page.DataContext is PageViewModelBase vm)
+                _ = vm.OnConnectionChangedAsync();
+        }    }
 
     private void UpdateStatusText()
     {
@@ -160,8 +164,16 @@ public class MainViewModel : ObservableObject
     public void Navigate(string code)
     {
         CurrentPage = GetPage(code);
-        if (CurrentPage is IReloadablePage reloadable && EsSession.Instance.IsConnected)
+
+        // 进入页面即自动刷新一次（节点/分片/索引等），未连接时由各页自行跳过。
+        if (CurrentPage is PageViewModelBase vm)
+        {
+            _ = vm.AutoReloadAsync();
+        }
+        else if (CurrentPage is IReloadablePage reloadable && EsSession.Instance.IsConnected)
+        {
             _ = reloadable.ReloadAsync();
+        }
     }
 
     public void NavigateSearch(string indexName)

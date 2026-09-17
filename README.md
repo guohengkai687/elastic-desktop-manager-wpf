@@ -21,6 +21,8 @@
 | 设置 | 语言（简中/English）、主题（浅色/深色/跟随系统）、请求超时、关闭行为 |
 | 关于 | 版本与项目信息 |
 
+进入 **节点 / 分片 / 索引** 等页面时会自动刷新一次数据（静默模式：不占全局忙碌条、失败不弹模态错误框，避免多页同时刷新时刷屏）；手动「刷新」按钮仍会显示忙碌与错误提示。连接建立或断开时，所有已打开的页面会同步刷新连接状态。
+
 ## SSL 支持与“跳过 SSL 验证”
 
 - **SSL 支持**：新建/编辑连接时可选择协议 **HTTP** 或 **HTTPS（SSL）**；地址也可直接填写完整 URL（`https://es.example.com:9200`），客户端按 `scheme://host:port/` 规整基址。
@@ -47,6 +49,7 @@ elastic-desktop-manager-wpf/
 │   ├── Mvvm/        ObservableObject / RelayCommand / AsyncRelayCommand
 │   └── Services/    ThemeService / Ui / SystemTheme
 └── tests/ElasticDesktopManager.Tests/  net8.0 控制台断言测试（Linux 可直接运行）
+    tests/binding-guard/               XAML 绑定契约静态守卫（Linux 可跑）
 ```
 
 ## 构建与运行
@@ -55,10 +58,13 @@ elastic-desktop-manager-wpf/
 
 ```bash
 # 还原并构建（Linux 亦可）
-dotnet build ElasticDesktopManager.slnx
+dotnet build ElasticDesktopManager.sln
 
 # 运行单元测试（Core 逻辑，Linux 可执行）
 dotnet run --project tests/ElasticDesktopManager.Tests -c Release
+
+# XAML 绑定契约守卫（静态检查“只读属性绑到默认 TwoWay 目标”这类仅运行时报错的绑定）
+dotnet run --project tests/binding-guard -c Release
 
 # 运行应用（Windows）
 dotnet run --project src/ElasticDesktopManager

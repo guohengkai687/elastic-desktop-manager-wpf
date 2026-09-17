@@ -107,7 +107,7 @@
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
             <TextBlock x:Name="SummaryText" Margin="0,0,0,8" FontSize="12"
-                       Foreground="{DynamicResource TextSecondaryBrush}" Text="{Binding SummaryText}" />
+                       Foreground="{DynamicResource TextSecondaryBrush}" Text="{Binding SummaryText, Mode=OneWay}" />
             <TabControl Grid.Row="1">
                 <TabItem>
                     <TabItem.Header>
@@ -125,7 +125,7 @@
                     <TabItem.Header>
                         <TextBlock x:Name="TabJsonHeader" />
                     </TabItem.Header>
-                    <TextBox Text="{Binding RawJson}" IsReadOnly="True" AcceptsReturn="True"
+                    <TextBox Text="{Binding RawJson, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True"
                              TextWrapping="NoWrap" VerticalScrollBarVisibility="Auto"
                              HorizontalScrollBarVisibility="Auto" FontFamily="Consolas, Courier New"
                              FontSize="12" BorderThickness="0" Background="Transparent" />

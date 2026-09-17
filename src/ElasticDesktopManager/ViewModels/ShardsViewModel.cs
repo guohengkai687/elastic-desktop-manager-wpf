@@ -24,7 +24,12 @@ public class ShardsViewModel : PageViewModelBase
         private set => SetProperty(ref _stateCounts, value);
     }
 
-    public override async Task ReloadAsync()
+    public override Task ReloadAsync() => LoadAsync(busy: true, silent: false);
+
+    /// <summary>进入页面时自动刷新：不占全局忙碌条、失败不弹模态框。</summary>
+    public override Task AutoReloadAsync() => LoadAsync(busy: false, silent: true);
+
+    private async Task LoadAsync(bool busy, bool silent)
     {
         if (!HasConnection) return;
         await RunAsync(async () =>
@@ -37,6 +42,6 @@ public class ShardsViewModel : PageViewModelBase
             var counts = list.GroupBy(x => x.State)
                 .Select(g => $"{g.Key}: {g.Count()}");
             StateCounts = string.Join("  ·  ", counts);
-        });
+        }, busy, silent);
     }
 }

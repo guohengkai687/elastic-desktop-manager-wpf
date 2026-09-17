@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- XAML 绑定契约静态守卫：无需 Windows/显示环境，Linux 可跑 -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>binding-guard</AssemblyName>
+  </PropertyGroup>
+
+</Project>

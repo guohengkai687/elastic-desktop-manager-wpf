@@ -29,7 +29,12 @@ public class NodesViewModel : PageViewModelBase
 
     private List<EsNode> _all = new();
 
-    public override async Task ReloadAsync()
+    public override Task ReloadAsync() => LoadAsync(busy: true, silent: false);
+
+    /// <summary>进入页面时自动刷新：不占全局忙碌条、失败不弹模态框。</summary>
+    public override Task AutoReloadAsync() => LoadAsync(busy: false, silent: true);
+
+    private async Task LoadAsync(bool busy, bool silent)
     {
         if (!HasConnection) return;
         await RunAsync(async () =>
@@ -38,7 +43,7 @@ public class NodesViewModel : PageViewModelBase
             _all = EsParsers.ParseNodes(json);
             ApplyFilter();
             Summary = $"{Localization.L("node.summary")}：{_all.Count}";
-        });
+        }, busy, silent);
     }
 
     private void ApplyFilter()

@@ -20,7 +20,7 @@
                        FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
             <TextBlock Grid.Column="2" x:Name="StateCountsText" VerticalAlignment="Center" Margin="16,0,0,0"
                        FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
-                       Text="{Binding StateCounts}" />
+                       Text="{Binding StateCounts, Mode=OneWay}" />
             <Button Grid.Column="3" Style="{StaticResource IconButtonStyle}" Click="OnRefresh" Content="⟳"
                     ToolTip="Refresh" />
         </Grid>

@@ -120,7 +120,12 @@ public class SearchViewModel : PageViewModelBase
         ClearResultsCommand = new RelayCommand(_ => ClearResults());
     }
 
-    public override async Task ReloadAsync()
+    public override Task ReloadAsync() => LoadIndicesAsync(busy: true, silent: false);
+
+    /// <summary>进入页面时自动刷新索引下拉：不占全局忙碌条、失败不弹模态框。</summary>
+    public override Task AutoReloadAsync() => LoadIndicesAsync(busy: false, silent: true);
+
+    private async Task LoadIndicesAsync(bool busy, bool silent)
     {
         if (!HasConnection) return;
         await RunAsync(async () =>
@@ -137,7 +142,7 @@ public class SearchViewModel : PageViewModelBase
 
             if (string.IsNullOrEmpty(SelectedIndex) && Indices.Count > 0)
                 SelectedIndex = Indices[0];
-        }, busy: false);
+        }, busy, silent);
     }
 
     public void PreselectIndex(string indexName)

@@ -21,7 +21,7 @@
             <TextBlock x:Name="TitleText" Style="{StaticResource PageTitleStyle}" />
             <TextBlock Grid.Column="1" x:Name="SummaryText" VerticalAlignment="Center" Margin="16,0,0,0"
                        FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
-                       Text="{Binding SummaryText}" />
+                       Text="{Binding SummaryText, Mode=OneWay}" />
             <Button Grid.Column="2" x:Name="ExportButton" Margin="0,0,8,0" Click="OnExport" />
             <Button Grid.Column="3" x:Name="PrevButton" Margin="0,0,8,0" Click="OnPrev"
                     IsEnabled="{Binding CanPrev}" />
@@ -73,7 +73,7 @@
                 <TabItem.Header>
                     <TextBlock x:Name="TabJsonHeader" />
                 </TabItem.Header>
-                <TextBox Text="{Binding RawJson}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap"
+                <TextBox Text="{Binding RawJson, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap"
                          VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
                          FontFamily="Consolas, Courier New" FontSize="12" BorderThickness="0"
                          Background="Transparent" />

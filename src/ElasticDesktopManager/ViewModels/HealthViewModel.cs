@@ -20,12 +20,50 @@ public class HealthViewModel : PageViewModelBase
     private readonly DispatcherTimer _timer;
 
     public ObservableList<MetricCard> Metrics { get; } = new();
-    public string StatusText { get; private set; } = "-";
-    public string ClusterName { get; private set; } = "-";
-    public string ClusterUuid { get; private set; } = "-";
-    public string NodeName { get; private set; } = "-";
-    public string VersionNumber { get; private set; } = "-";
-    public string LuceneVersion { get; private set; } = "-";
+
+    // 以下属性必须走 SetProperty：HealthView 直接绑定它们，
+    // 用自动属性会导致数据加载完成后界面仍停留在 “-”。
+    private string _statusText = "-";
+    public string StatusText
+    {
+        get => _statusText;
+        private set => SetProperty(ref _statusText, value);
+    }
+
+    private string _clusterName = "-";
+    public string ClusterName
+    {
+        get => _clusterName;
+        private set => SetProperty(ref _clusterName, value);
+    }
+
+    private string _clusterUuid = "-";
+    public string ClusterUuid
+    {
+        get => _clusterUuid;
+        private set => SetProperty(ref _clusterUuid, value);
+    }
+
+    private string _nodeName = "-";
+    public string NodeName
+    {
+        get => _nodeName;
+        private set => SetProperty(ref _nodeName, value);
+    }
+
+    private string _versionNumber = "-";
+    public string VersionNumber
+    {
+        get => _versionNumber;
+        private set => SetProperty(ref _versionNumber, value);
+    }
+
+    private string _luceneVersion = "-";
+    public string LuceneVersion
+    {
+        get => _luceneVersion;
+        private set => SetProperty(ref _luceneVersion, value);
+    }
 
     private bool _autoRefresh = true;
     public bool AutoRefresh
@@ -68,7 +106,12 @@ public class HealthViewModel : PageViewModelBase
         else _timer.Stop();
     }
 
-    public override async Task ReloadAsync()
+    public override Task ReloadAsync() => LoadHealthAsync(busy: true, silent: false);
+
+    /// <summary>进入页面/连接建立时自动刷新：不占全局忙碌条、失败不弹模态框。</summary>
+    public override Task AutoReloadAsync() => LoadHealthAsync(busy: false, silent: true);
+
+    private async Task LoadHealthAsync(bool busy, bool silent)
     {
         if (!HasConnection) return;
         await RunAsync(async () =>
@@ -87,7 +130,7 @@ public class HealthViewModel : PageViewModelBase
             {
                 // ES 信息失败不阻塞健康展示
             }
-        }, busy: false);
+        }, busy: false, silent: silent);
     }
 
     private void ApplyHealth()

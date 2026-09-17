@@ -125,7 +125,12 @@ public class IndicesViewModel : PageViewModelBase
         CloseCommand = CreateConfirm(Localization.L("index.confirm.close"), (c, i) => c.CloseIndexAsync(i.Name, CancellationToken.None));
     }
 
-    public override async Task ReloadAsync()
+    public override Task ReloadAsync() => LoadAsync(busy: true, silent: false);
+
+    /// <summary>进入页面时自动刷新：不占全局忙碌条、失败不弹模态框。</summary>
+    public override Task AutoReloadAsync() => LoadAsync(busy: false, silent: true);
+
+    private async Task LoadAsync(bool busy, bool silent)
     {
         if (!HasConnection) return;
         await RunAsync(async () =>
@@ -133,7 +138,7 @@ public class IndicesViewModel : PageViewModelBase
             string json = await Client.GetIndicesAsync(EsClient.IndicesFormat);
             _all = EsParsers.ParseIndices(json);
             ApplyFilter();
-        });
+        }, busy, silent);
     }
 
     private void ApplyFilter()
