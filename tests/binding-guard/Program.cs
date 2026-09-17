@@ -813,6 +813,47 @@ Check("i18n：zh_CN 与 en 词条数量完全相等", () =>
 });
 
 
+// ---- 规则：同一条词条在两种语言里的占位符必须一致 ----
+//
+// `Localization.L(key, args)` 内部是 string.Format：中文写了 "{0} 个仓库" 而英文写成
+// "repositories"（漏了 {0}），英文界面就会静默丢掉参数；反过来多写一个 {1} 更糟 ——
+// FormatException 被 Localization.L 吞掉后会**直接显示带 {} 的格式串**。
+static Dictionary<string, string> DictionaryEntries(string block)
+{
+    var map = new Dictionary<string, string>();
+    foreach (Match m in Regex.Matches(block, @"\[""([^""]+)""\]\s*=\s*""((?:[^""\\]|\\.)*)"""))
+        map[m.Groups[1].Value] = m.Groups[2].Value;
+    return map;
+}
+
+static string[] Placeholders(string value) =>
+    Regex.Matches(value, @"\{(\d+)\}").Select(m => m.Groups[1].Value).Distinct().OrderBy(x => x).ToArray();
+
+Check("i18n：同一条词条在 zh_CN / en 里的占位符必须一致", () =>
+{
+    string locFile = Path.Combine(repoRoot, "src", "ElasticDesktopManager.Core", "I18n", "Localization.cs");
+    string src = File.ReadAllText(locFile);
+    int zhStart = src.IndexOf("Dictionary<string, string> Zh", StringComparison.Ordinal);
+    int enStart = src.IndexOf("Dictionary<string, string> En", StringComparison.Ordinal);
+    if (zhStart < 0 || enStart < 0 || enStart < zhStart)
+        throw new Exception("未能定位 Zh / En 词典声明");
+
+    var zh = DictionaryEntries(src[zhStart..enStart]);
+    var en = DictionaryEntries(src[enStart..]);
+
+    var bad = new List<string>();
+    foreach (var (key, zhValue) in zh)
+    {
+        if (!en.TryGetValue(key, out var enValue)) continue;
+        var a = Placeholders(zhValue);
+        var b = Placeholders(enValue);
+        if (!a.SequenceEqual(b))
+            bad.Add($"{key}: zh={{{string.Join(",", a)}}} vs en={{{string.Join(",", b)}}}");
+    }
+    if (bad.Count > 0)
+        throw new Exception($"发现 {bad.Count} 条占位符不一致：\n    " + string.Join("\n    ", bad.Distinct()));
+});
+
 // ---- 规则：可编辑 ComboBox 必须提供 PART_EditableTextBox ----
 //
 // 背景（真实缺陷）：ComboBox 模板是我们自己写的，而 IsEditable="True" 时 WPF 需要模板里
@@ -939,6 +980,16 @@ Check("守卫自检：未定义的 i18n key / 缺失的 PART_EditableTextBox 必
     if (ComboTemplateHasEditableBox(
             """<ControlTemplate TargetType="ComboBox"><ContentPresenter /></ControlTemplate>"""))
         throw new Exception("未抓出缺失的 PART_EditableTextBox");
+
+    // ---- 占位符一致性 ----
+    var zh = DictionaryEntries("""["a"]="{0} 个{x}", "b"="没有占位符",""");
+    var en = DictionaryEntries("""["a"]="{0} items", "b"="no placeholder",""");
+    if (!Placeholders(zh["a"]).SequenceEqual(Placeholders(en["a"])))
+        throw new Exception("自检样本构造失败");
+    if (Placeholders("保留 {0}~{1}").SequenceEqual(Placeholders("keep {0}")))
+        throw new Exception("未抓出占位符数量不一致");
+    if (!Placeholders("{1} {0}").SequenceEqual(Placeholders("{0} {1}")))
+        throw new Exception("误报：占位符顺序不同不应算不一致");
 });
 
 Console.WriteLine();
