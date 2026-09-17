@@ -862,11 +862,31 @@ Check("i18n：同一条词条在 zh_CN / en 里的占位符必须一致", () =>
 // 构建期看不出来、本机也跑不了 WPF，只能靠静态规则兜住。
 static bool ComboTemplateHasEditableBox(string xaml)
 {
-    // 先去掉 XML 注释：模板里那段"必须提供 PART_EditableTextBox"的说明文字本身就会
-    // 让裸词匹配成功 —— 这正是"假绿"的来源（负向验证时抓到过一次）。
-    string code = Regex.Replace(xaml, "<!--.*?-->", "", RegexOptions.Singleline);
-    int idx = code.IndexOf("<ControlTemplate TargetType=\"ComboBox\">", StringComparison.Ordinal);
-    return idx >= 0 && code[idx..].Contains("x:Name=\"PART_EditableTextBox\"", StringComparison.Ordinal);
+    // 用 XML 解析而不是字符串搜索，理由有三个，都是踩过的坑：
+    //   ① 字符串搜索会被注释里的 "PART_EditableTextBox" 骗到（模板里那段说明文字）；
+    //      解析成元素树后注释根本不是元素，天然排除。
+    //   ② 必须限定在 ComboBox 模板自己的**名字域**里：模板内部还嵌着 ToggleButton 的
+    //      ControlTemplate，写在那里的同名 TextBox 用 ComboBox.FindName 根本够不到，
+    //      字符串搜索却会认为"有"。
+    //   ③ 搜索不能一路扫到文件尾，否则后面任何一个模板里的同名元素都能让它变绿。
+    XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+    XElement? combo;
+    try
+    {
+        combo = XDocument.Parse(xaml).Descendants()
+            .FirstOrDefault(e => e.Name.LocalName == "ControlTemplate"
+                                 && (string?)e.Attribute("TargetType") == "ComboBox");
+    }
+    catch (System.Xml.XmlException)
+    {
+        return false; // 解析不了的样本一律当作"没有"，由调用方的解析失败提示兜底
+    }
+    if (combo is null) return false;
+
+    return combo.Descendants().Any(e =>
+        e.Name.LocalName == "TextBox"
+        && (string?)e.Attribute(x + "Name") == "PART_EditableTextBox"
+        && !e.Ancestors().TakeWhile(a => a != combo).Any(a => a.Name.LocalName == "ControlTemplate"));
 }
 
 Check("控件模板：可编辑 ComboBox 必须包含 PART_EditableTextBox", () =>
@@ -874,8 +894,15 @@ Check("控件模板：可编辑 ComboBox 必须包含 PART_EditableTextBox", () 
     var editableUsers = new List<string>();
     foreach (var f in Directory.GetFiles(Path.Combine(repoRoot, "src"), "*.xaml", SearchOption.AllDirectories))
     {
-        if (Regex.IsMatch(File.ReadAllText(f), @"<ComboBox\b[^>]*\bIsEditable\s*=\s*""True"""))
+        // 只要出现 IsEditable 且不是显式 False 就算"可能可编辑"：
+        // IsEditable="true"（小写）、IsEditable="{Binding ...}" 这些写法都不应该漏掉。
+        foreach (Match m in Regex.Matches(File.ReadAllText(f),
+                     @"<ComboBox\b[^>]*\bIsEditable\s*=\s*""([^""]*)""", RegexOptions.Singleline))
+        {
+            if (m.Groups[1].Value.Trim().Equals("False", StringComparison.OrdinalIgnoreCase)) continue;
             editableUsers.Add(Path.GetRelativePath(repoRoot, f));
+            break;
+        }
     }
     if (editableUsers.Count == 0) return; // 没人用可编辑下拉 → 不要求模板带该部件
 
@@ -904,6 +931,16 @@ static (HashSet<string> Keys, HashSet<string> Prefixes) LoadDictionary(string ro
     return (keys, prefixes);
 }
 
+/// <summary>
+/// "长得像 i18n key 但其实是普通字面量"的白名单。
+/// 只放 WPF 工程里确实不是词条的整串字面量；每项都要写清为什么不是 key。
+/// （顶层语句里不能声明字段，所以做成静态本地函数。）
+/// </summary>
+static HashSet<string> NotI18nLiterals() => new(StringComparer.Ordinal)
+{
+    // 目前为空：WPF 工程里所有"整串小写点分字面量"都必须是词条。
+};
+
 static List<string> FindUnknownI18nKeys(string source, string label, HashSet<string> keys,
     HashSet<string> prefixes, bool broad)
 {
@@ -924,14 +961,42 @@ static List<string> FindUnknownI18nKeys(string source, string label, HashSet<str
     if (!broad) return hits;
 
     // ② 整串字面量（含两边引号一起匹配 → URL、"application/json" 这类天然被排除）
+    //
+    // 这里刻意**不**再用"首段必须命中已有前缀"当闸门：那会静默放过首段拼错的 key
+    // （`(0, "snaphot.col.name")` 恰好是这条规则最该抓的形态）。改用显式白名单，
+    // 名单里的每一项都必须是不属于 i18n 的普通字面量，且要写清理由。
     foreach (Match m in Regex.Matches(source, @"""([a-z][A-Za-z0-9]*(?:\.[A-Za-z0-9]+)+)"""))
     {
         string key = m.Groups[1].Value;
-        if (!prefixes.Contains(key[..key.IndexOf('.')])) continue;
+        if (NotI18nLiterals().Contains(key)) continue;
         if (!keys.Contains(key)) Add(key, $"\"{key}\"");
     }
     return hits;
 }
+
+// ---- 规则：每个窗口根元素必须显式套用 WindowBaseStyle ----
+//
+// ADR-9 的护栏：WPF 的隐式样式按元素具体类型查资源，`TargetType="Window"` 的隐式样式
+// 不会作用到 MainWindow/SettingsWindow 等派生窗口（dotnet/wpf#10461），客户区会退回
+// SystemColors.WindowBrush（浅色系统下是白色）——深色主题下就是一大片白底。
+// 这条规则保证"以后新增窗口"不会再把这个缺陷带回来。
+static bool WindowHasBaseStyle(string xaml) =>
+    Regex.IsMatch(xaml, @"<Window\b[^>]*Style\s*=\s*""\{StaticResource WindowBaseStyle\}""",
+        RegexOptions.Singleline);
+
+Check("窗口：每个 Window 根元素必须显式套用 WindowBaseStyle（隐式 Window 样式不生效）", () =>
+{
+    var missing = new List<string>();
+    foreach (var f in Directory.GetFiles(Path.Combine(repoRoot, "src"), "*.xaml", SearchOption.AllDirectories))
+    {
+        string text = File.ReadAllText(f);
+        if (!Regex.IsMatch(text, @"<Window\b")) continue;
+        if (!WindowHasBaseStyle(text)) missing.Add(Path.GetRelativePath(repoRoot, f));
+    }
+    if (missing.Count > 0)
+        throw new Exception($"这些窗口没有显式套用 WindowBaseStyle（客户区会退回系统白底，深色主题下尤为明显）：\n    "
+            + string.Join("\n    ", missing));
+});
 
 Check("i18n：代码里用到的 key 都存在于词典（防漏词条 → 界面直接显示 key）", () =>
 {
@@ -971,15 +1036,44 @@ Check("守卫自检：未定义的 i18n key / 缺失的 PART_EditableTextBox 必
         throw new Exception("误报：普通字符串（含 /）不应被当成 key");
     if (FindUnknownI18nKeys("""var h = "/_cat/nodes?h=node.role,master";""", "t", keys, prefixes, true).Count != 0)
         throw new Exception("误报：URL 查询串里的 node.role 不是 key");
-    if (FindUnknownI18nKeys("""var f = "config.json";""", "t", keys, prefixes, true).Count != 0)
-        throw new Exception("误报：文件名不该被当成 key（宽松遍只扫 WPF 工程）");
+    // 宽松遍已去掉"前缀闸门"：首段拼错的 key 以前会被静默跳过，现在必须抓出来。
+    // 代价是非词条字面量会被报出，因此 WPF 工程里的这类字面量必须显式进白名单。
+    if (FindUnknownI18nKeys("""new HeaderMap { (0, "snaphot.col.name") }""", "t", keys, prefixes, true).Count != 1)
+        throw new Exception("未抓出首段拼错的 key（前缀闸门已移除，这条必须过）");
+    if (FindUnknownI18nKeys("""var f = "config.json";""", "t", keys, prefixes, false).Count != 0)
+        throw new Exception("精确遍不应把普通字面量当成 key");
 
+    // 窗口基样式：有/无 两个方向
+    if (!WindowHasBaseStyle("""<Window x:Class="X" Style="{StaticResource WindowBaseStyle}">"""))
+        throw new Exception("未识别已套用 WindowBaseStyle 的窗口");
+    if (WindowHasBaseStyle("""<Window x:Class="X" Title="Y">"""))
+        throw new Exception("未抓出没有套用 WindowBaseStyle 的窗口");
+
+    // 白名单只能放"确实不是词条"的字面量，否则它就成了掩盖真实缺词的橡皮擦
+    var (realKeys, _) = LoadDictionary(repoRoot);
+    foreach (var literal in NotI18nLiterals())
+        if (realKeys.Contains(literal))
+            throw new Exception($"白名单里的 \"{literal}\" 其实是词条，应删掉该白名单项");
+
+    const string xns = "xmlns:x=\"http://schemas.microsoft.com/winfx/2006/xaml\"";
     if (!ComboTemplateHasEditableBox(
-            """<ControlTemplate TargetType="ComboBox"><TextBox x:Name="PART_EditableTextBox" /></ControlTemplate>"""))
+            $"<ResourceDictionary {xns}><ControlTemplate TargetType=\"ComboBox\"><TextBox x:Name=\"PART_EditableTextBox\" /></ControlTemplate></ResourceDictionary>"))
         throw new Exception("未识别已存在的 PART_EditableTextBox");
     if (ComboTemplateHasEditableBox(
-            """<ControlTemplate TargetType="ComboBox"><ContentPresenter /></ControlTemplate>"""))
+            $"<ResourceDictionary {xns}><ControlTemplate TargetType=\"ComboBox\"><ContentPresenter /></ControlTemplate></ResourceDictionary>"))
         throw new Exception("未抓出缺失的 PART_EditableTextBox");
+    // ① 注释里的同名文字不算
+    if (ComboTemplateHasEditableBox(
+            $"<ResourceDictionary {xns}><!-- 必须提供 x:Name=\"PART_EditableTextBox\" --><ControlTemplate TargetType=\"ComboBox\"><ContentPresenter /></ControlTemplate></ResourceDictionary>"))
+        throw new Exception("误报：注释里的 PART_EditableTextBox 不该算数");
+    // ② 嵌在子模板里的同名 TextBox 不算（ComboBox.FindName 够不到它）
+    if (ComboTemplateHasEditableBox(
+            $"<ResourceDictionary {xns}><ControlTemplate TargetType=\"ComboBox\"><ToggleButton><ToggleButton.Template><ControlTemplate TargetType=\"ToggleButton\"><TextBox x:Name=\"PART_EditableTextBox\" /></ControlTemplate></ToggleButton.Template></ToggleButton></ControlTemplate></ResourceDictionary>"))
+        throw new Exception("误报：子模板里的同名部件对 ComboBox 不可见，不该算数");
+    // ③ 后面别的模板里有同名部件也不算
+    if (ComboTemplateHasEditableBox(
+            $"<ResourceDictionary {xns}><ControlTemplate TargetType=\"ComboBox\"><ContentPresenter /></ControlTemplate><ControlTemplate TargetType=\"Other\"><TextBox x:Name=\"PART_EditableTextBox\" /></ControlTemplate></ResourceDictionary>"))
+        throw new Exception("误报：别的模板里的同名部件不该让本条通过");
 
     // ---- 占位符一致性 ----
     var zh = DictionaryEntries("""["a"]="{0} 个{x}", "b"="没有占位符",""");

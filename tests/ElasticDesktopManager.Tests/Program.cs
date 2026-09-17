@@ -1365,14 +1365,12 @@ Test("解析: ILM 生命周期策略（阶段链/使用中索引/修改时间）
     Eq("empty", list[0].PolicyId, "按策略 ID 排序");
 
     var logs = list[1];
-    Eq(3, logs.PhaseCount, "阶段数");
     Eq("hot → warm → delete", logs.PhasesText, "阶段链（保持 ES 返回顺序）");
     Eq(2, logs.IndicesInUseCount, "使用中索引数");
     Eq("logs-0001, logs-0002", logs.IndicesInUse, "使用中索引拼接");
     True(!string.IsNullOrEmpty(logs.ModifiedDate), "修改时间已格式化");
     Contains(logs.PolicyJson, "phases", "策略原文保留");
 
-    Eq(0, list[0].PhaseCount, "空 phases → 0 个阶段");
     Eq("", list[0].PhasesText, "空 phases → 空阶段链");
     Eq(0, list[0].IndicesInUseCount, "没有 in_use_by → 0");
     Eq(0, EsParsers.ParseIlmPolicies("{}").Count, "空对象");
@@ -1390,13 +1388,15 @@ Test("解析: 恢复进度（分片级别，DONE 判定与进度显示）", () =
                 "index": { "size": { "total_in_bytes": 2097152, "recovered_in_bytes": 2097152 },
                            "files": { "total": 4, "recovered": 4, "percent": "100.0%" } } },
               { "id": 1, "type": "SNAPSHOT", "stage": "INDEX", "total_time_in_millis": 0,
-                "index": { "files": { "recovered": 2, "percent": "42.5%" } } }
+                "index": { "files": { "recovered": 2, "percent": "42.5%" } } },
+              { "id": 2, "type": "SNAPSHOT", "stage": "DONE",
+                "source": { "repository": "repo-a", "snapshot": "snap-1" } }
             ]
           }
         }
         """;
     var rows = EsParsers.ParseRecovery(json);
-    Eq(2, rows.Count, "每个分片一行");
+    Eq(3, rows.Count, "每个分片一行");
     Eq("restored-1", rows[0].Index, "索引名");
     Eq("0", rows[0].Shard, "分片号");
     Eq("SNAPSHOT", rows[0].Type, "恢复类型");
@@ -1412,6 +1412,7 @@ Test("解析: 恢复进度（分片级别，DONE 判定与进度显示）", () =
     Eq("42.5%", rows[1].FilesPercent, "进行中的百分比");
     Eq("", rows[1].BytesText, "缺 size → 空串而不是抛异常");
     Eq("", rows[1].Source, "缺 source → 空串");
+    Eq("repo-a/snap-1", rows[2].Source, "快照恢复的 source 没有 host/name → 回退成 repository/snapshot");
     Eq(0, EsParsers.ParseRecovery("{}").Count, "空对象");
     Eq(0, EsParsers.ParseRecovery("""{"idx":{"no_shards":true}}""").Count, "没有 shards 字段");
 });

@@ -7,7 +7,8 @@ namespace ElasticDesktopManager.Views;
 
 /// <summary>
 /// 快照页五个列表（仓库 / 快照 / 恢复 / 自动策略 / 生命周期）的本地化。
-/// 文本统一在这里赋值，XAML 里保留英文占位，便于比对与维护。
+/// XAML 里**不写**任何表头/按钮文案（只放 x:Name），全部由本文件统一赋值 ——
+/// 这样中文界面不会漏出英文占位，代价是表头映射的列下标必须与 XAML 的列顺序严格对齐。
 /// </summary>
 public partial class SnapshotView : UserControl
 {
@@ -33,8 +34,8 @@ public partial class SnapshotView : UserControl
     private static readonly (int Index, string Key)[] SlmHeaders =
     {
         (0, "snapshot.col.policyId"), (1, "snapshot.col.schedule"), (2, "snapshot.col.repository"),
-        (3, "snapshot.col.nameTemplate"), (4, "snapshot.col.nextExecution"), (5, "snapshot.col.lastSuccess"),
-        (6, "snapshot.col.lastFailure"), (7, "snapshot.col.stats"),
+        (3, "snapshot.col.nameTemplate"), (4, "snapshot.col.retention"), (5, "snapshot.col.nextExecution"),
+        (6, "snapshot.col.lastSuccess"), (7, "snapshot.col.lastFailure"), (8, "snapshot.col.stats"),
     };
 
     private static readonly (int Index, string Key)[] IlmHeaders =
@@ -47,6 +48,10 @@ public partial class SnapshotView : UserControl
     {
         InitializeComponent();
         Loaded += (_, _) => Localize();
+        // 页面被 MainViewModel 缓存，从模态设置框切换语言时不会触发 Unloaded/Loaded，
+        // 所以必须显式订阅语言变更，否则整页 chrome 会停在旧语言（而 VM 的状态行已切新语言）。
+        // 视图与应用同生命周期，无需解绑。
+        Localization.LanguageChanged += Localize;
     }
 
     private void Localize()

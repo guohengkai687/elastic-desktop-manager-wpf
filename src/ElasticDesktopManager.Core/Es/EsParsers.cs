@@ -566,7 +566,6 @@ public static class EsParsers
             {
                 var names = new List<string>();
                 foreach (var ph in phases.EnumerateObject()) names.Add(ph.Name);
-                item.PhaseCount = names.Count;
                 item.PhasesText = string.Join(" → ", names);
             }
 
@@ -594,6 +593,8 @@ public static class EsParsers
 
         foreach (var prop in doc.RootElement.EnumerateObject())
         {
+            // 和其他解析器保持一致：先判 Object，否则根成员是字符串/数组时 TryGetProperty 会抛
+            if (prop.Value.ValueKind != JsonValueKind.Object) continue;
             if (!prop.Value.TryGetProperty("shards", out var shards) || shards.ValueKind != JsonValueKind.Array)
                 continue;
 
@@ -637,7 +638,15 @@ public static class EsParsers
         if (!shard.TryGetProperty(side, out var s) || s.ValueKind != JsonValueKind.Object) return "";
         string host = JsonHelper.GetString(s, "host");
         if (!string.IsNullOrEmpty(host)) return host;
-        return JsonHelper.GetString(s, "name");
+        string name = JsonHelper.GetString(s, "name");
+        if (!string.IsNullOrEmpty(name)) return name;
+
+        // 快照恢复的 source 没有 host/name，只有 repository + snapshot
+        // （不带上这一层，恢复页的"来源"列在最主要的场景下永远是空的）。
+        string repo = JsonHelper.GetString(s, "repository");
+        string snap = JsonHelper.GetString(s, "snapshot");
+        if (string.IsNullOrEmpty(repo) && string.IsNullOrEmpty(snap)) return "";
+        return string.IsNullOrEmpty(repo) ? snap : $"{repo}/{snap}";
     }
 
     /// <summary>取 obj[a][b] 里的字符串数组并拼接（缺失返回空串）。</summary>

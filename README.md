@@ -121,7 +121,7 @@ elastic-desktop-manager-wpf/
 │   ├── Mvvm/        ObservableObject / RelayCommand / AsyncRelayCommand
 │   └── Services/    ThemeService / Ui / SystemTheme
 └── tests/ElasticDesktopManager.Tests/  net8.0 控制台断言测试（Linux 可直接运行）
-    tests/binding-guard/               XAML 绑定契约 + 资源 key + 令牌类型 + 派生属性通知 + i18n 静态守卫（17 项，Linux 可跑）
+    tests/binding-guard/               XAML 绑定契约 + 资源 key + 令牌类型 + 派生属性通知 + i18n 静态守卫（18 项，Linux 可跑）
 ```
 
 ## 构建与运行
@@ -135,7 +135,7 @@ dotnet build ElasticDesktopManager.sln
 # 运行单元测试（Core 逻辑，Linux 可执行）
 dotnet run --project tests/ElasticDesktopManager.Tests -c Release
 
-# XAML 绑定契约 + 资源 key + 令牌类型 + 派生属性通知 + i18n 静态守卫（17 项，含可失败自检）
+# XAML 绑定契约 + 资源 key + 令牌类型 + 派生属性通知 + i18n 静态守卫（18 项，含可失败自检）
 # 覆盖：只读属性绑到默认 TwoWay 目标 / Dark·Light 主题 key 不对称 / 硬编码颜色 /
 #      引用了不存在的资源 key（DynamicResource + StaticResource）/ 资源引用嵌在字符串中 /
 #      设计令牌类型与目标属性不匹配（如 Double 用于 GridLength/Thickness，会启动即崩）/ /

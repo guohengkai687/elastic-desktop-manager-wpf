@@ -165,7 +165,7 @@
 - [x] Core 新增解析器与模型：`EsSlmPolicy`、`EsIlmPolicy`、`EsRecoveryShard`（含 7.x 对象 / 8.x 字符串双形态兼容）
 - [x] 每页签**独立状态行**（`TabStatus`：正常次要色 / 错误危险色），SLM/ILM 不支持的集群只在对应页签内报错
 - [x] i18n 新增 88 个词条（zh/en 严格对齐，守卫强制）
-- [x] 守卫 13 → **17 项**：可编辑 ComboBox 部件、i18n key 存在性（两遍扫描）、zh/en 占位符一致性，均做负向验证；
+- [x] 守卫 13 → **18 项**：可编辑 ComboBox 部件、i18n key 存在性（两遍扫描）、zh/en 占位符一致性、窗口必须套 WindowBaseStyle，均做负向验证；
       新规则**发现并修复 2 处历史遗留**（`common.save` / `common.add` 从未定义）
 - [x] 测试 96 → **102**：索引名解析、SLM/ILM/恢复端点契约、恢复重命名、SLM 解析、ILM 解析、恢复进度解析
 - [x] 文档更新（README / ARCHITECTURE ADR-9·ADR-10·R13-R15 / QA 第 4 轮 / 本文件）

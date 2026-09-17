@@ -31,7 +31,7 @@
 
                     <Grid Margin="0,0,0,10">
                         <StackPanel Orientation="Horizontal">
-                            <Button Style="{StaticResource AccentButtonStyle}" Command="{Binding ToggleFormCommand}">
+                            <Button Style="{StaticResource AccentButtonStyle}" Command="{Binding ToggleFormCommand}" CommandParameter="repo">
                                 <StackPanel Orientation="Horizontal">
                                     <Path Style="{StaticResource IconPathSmallStyle}"
                                           Data="{x:Static icons:AppIconGeometries.Add}"
@@ -64,12 +64,12 @@
                     </Grid>
 
                     <Border Grid.Row="1" Style="{StaticResource CardStyle}" Margin="0,0,0,10"
-                            Visibility="{Binding IsFormOpen, Converter={StaticResource BoolToVisibility}}">
+                            Visibility="{Binding IsRepoFormOpen, Converter={StaticResource BoolToVisibility}}">
                         <StackPanel>
                             <Grid>
                                 <TextBlock x:Name="RepoFormTitle" Style="{StaticResource SectionTitleStyle}" />
                                 <Button HorizontalAlignment="Right" Style="{StaticResource IconButtonStyle}"
-                                        Command="{Binding ToggleFormCommand}">
+                                        Command="{Binding ToggleFormCommand}" CommandParameter="repo">
                                     <Path Style="{StaticResource IconPathSmallStyle}"
                                           Data="{x:Static icons:AppIconGeometries.Close}"
                                           Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
@@ -137,7 +137,7 @@
 
                     <Grid Margin="0,0,0,10">
                         <StackPanel Orientation="Horizontal">
-                            <Button Style="{StaticResource AccentButtonStyle}" Command="{Binding ToggleFormCommand}">
+                            <Button Style="{StaticResource AccentButtonStyle}" Command="{Binding ToggleFormCommand}" CommandParameter="snapshot">
                                 <StackPanel Orientation="Horizontal">
                                     <Path Style="{StaticResource IconPathSmallStyle}"
                                           Data="{x:Static icons:AppIconGeometries.Add}"
@@ -170,12 +170,12 @@
                     </Grid>
 
                     <Border Grid.Row="1" Style="{StaticResource CardStyle}" Margin="0,0,0,10"
-                            Visibility="{Binding IsFormOpen, Converter={StaticResource BoolToVisibility}}">
+                            Visibility="{Binding IsSnapshotFormOpen, Converter={StaticResource BoolToVisibility}}">
                         <StackPanel>
                             <Grid>
                                 <TextBlock x:Name="SnapshotFormTitle" Style="{StaticResource SectionTitleStyle}" />
                                 <Button HorizontalAlignment="Right" Style="{StaticResource IconButtonStyle}"
-                                        Command="{Binding ToggleFormCommand}">
+                                        Command="{Binding ToggleFormCommand}" CommandParameter="snapshot">
                                     <Path Style="{StaticResource IconPathSmallStyle}"
                                           Data="{x:Static icons:AppIconGeometries.Close}"
                                           Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
@@ -342,7 +342,7 @@
                                                     <Style TargetType="Ellipse">
                                                         <Setter Property="Fill" Value="{DynamicResource AccentBrush}" />
                                                         <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding Stage}" Value="DONE">
+                                                            <DataTrigger Binding="{Binding IsDone}" Value="True">
                                                                 <Setter Property="Fill" Value="{DynamicResource GreenBrush}" />
                                                             </DataTrigger>
                                                         </Style.Triggers>
@@ -377,7 +377,7 @@
 
                     <Grid Margin="0,0,0,10">
                         <StackPanel Orientation="Horizontal">
-                            <Button Style="{StaticResource AccentButtonStyle}" Command="{Binding ToggleFormCommand}">
+                            <Button Style="{StaticResource AccentButtonStyle}" Command="{Binding ToggleFormCommand}" CommandParameter="slm">
                                 <StackPanel Orientation="Horizontal">
                                     <Path Style="{StaticResource IconPathSmallStyle}"
                                           Data="{x:Static icons:AppIconGeometries.Add}"
@@ -416,12 +416,12 @@
                     </Grid>
 
                     <Border Grid.Row="1" Style="{StaticResource CardStyle}" Margin="0,0,0,10"
-                            Visibility="{Binding IsFormOpen, Converter={StaticResource BoolToVisibility}}">
+                            Visibility="{Binding IsSlmFormOpen, Converter={StaticResource BoolToVisibility}}">
                         <StackPanel>
                             <Grid>
                                 <TextBlock x:Name="SlmFormTitle" Style="{StaticResource SectionTitleStyle}" />
                                 <Button HorizontalAlignment="Right" Style="{StaticResource IconButtonStyle}"
-                                        Command="{Binding ToggleFormCommand}">
+                                        Command="{Binding ToggleFormCommand}" CommandParameter="slm">
                                     <Path Style="{StaticResource IconPathSmallStyle}"
                                           Data="{x:Static icons:AppIconGeometries.Close}"
                                           Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
@@ -493,12 +493,13 @@
                               ItemsSource="{Binding SlmPolicies}"
                               SelectedItem="{Binding SelectedSlmPolicy}">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Binding="{Binding PolicyId}" Width="170" />
-                            <DataGridTextColumn Binding="{Binding Schedule}" Width="150" />
-                            <DataGridTextColumn Binding="{Binding Repository}" Width="140" />
-                            <DataGridTextColumn Binding="{Binding SnapshotNameTemplate}" Width="180" />
-                            <DataGridTextColumn Binding="{Binding NextExecution}" Width="160" />
-                            <DataGridTextColumn Binding="{Binding LastSuccess}" Width="180" />
+                            <DataGridTextColumn Binding="{Binding PolicyId}" Width="150" />
+                            <DataGridTextColumn Binding="{Binding Schedule}" Width="140" />
+                            <DataGridTextColumn Binding="{Binding Repository}" Width="130" />
+                            <DataGridTextColumn Binding="{Binding SnapshotNameTemplate}" Width="170" />
+                            <DataGridTextColumn Binding="{Binding RetentionText}" Width="150" />
+                            <DataGridTextColumn Binding="{Binding NextExecution}" Width="150" />
+                            <DataGridTextColumn Binding="{Binding LastSuccess}" Width="160" />
                             <DataGridTemplateColumn Width="200">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
@@ -542,7 +543,7 @@
 
                     <Grid Margin="0,0,0,10">
                         <StackPanel Orientation="Horizontal">
-                            <Button Style="{StaticResource AccentButtonStyle}" Command="{Binding ToggleFormCommand}">
+                            <Button Style="{StaticResource AccentButtonStyle}" Command="{Binding ToggleFormCommand}" CommandParameter="ilm">
                                 <StackPanel Orientation="Horizontal">
                                     <Path Style="{StaticResource IconPathSmallStyle}"
                                           Data="{x:Static icons:AppIconGeometries.Add}"
@@ -575,12 +576,12 @@
                     </Grid>
 
                     <Border Grid.Row="1" Style="{StaticResource CardStyle}" Margin="0,0,0,10"
-                            Visibility="{Binding IsFormOpen, Converter={StaticResource BoolToVisibility}}">
+                            Visibility="{Binding IsIlmFormOpen, Converter={StaticResource BoolToVisibility}}">
                         <StackPanel>
                             <Grid>
                                 <TextBlock x:Name="IlmFormTitle" Style="{StaticResource SectionTitleStyle}" />
                                 <Button HorizontalAlignment="Right" Style="{StaticResource IconButtonStyle}"
-                                        Command="{Binding ToggleFormCommand}">
+                                        Command="{Binding ToggleFormCommand}" CommandParameter="ilm">
                                     <Path Style="{StaticResource IconPathSmallStyle}"
                                           Data="{x:Static icons:AppIconGeometries.Close}"
                                           Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />

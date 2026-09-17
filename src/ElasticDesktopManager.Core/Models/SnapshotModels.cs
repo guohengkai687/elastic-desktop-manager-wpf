@@ -52,8 +52,6 @@ public class EsSnapshot
     /// <summary>是否处于进行中/部分完成（供界面着色）。</summary>
     public bool IsPending => State is "IN_PROGRESS" or "PARTIAL" or "STARTED";
 
-    /// <summary>是否失败（供界面着色）。</summary>
-    public bool IsFailed => State is "FAILED" or "INCOMPATIBLE";
 }
 
 /// <summary>
@@ -103,8 +101,6 @@ public class EsIlmPolicy
 
     /// <summary>阶段链，如 "hot → warm → delete"。</summary>
     public string PhasesText { get; set; } = "";
-
-    public int PhaseCount { get; set; }
 
     public string ModifiedDate { get; set; } = "";
 

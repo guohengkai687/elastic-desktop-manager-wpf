@@ -68,3 +68,51 @@
 - 遗留（如实）：A10、B6、快照/SLM/ILM/文档 CRUD、逐条指标说明表、真机 GUI 与集群联调。
 - **审查独立性提示**：本轮审查由主代理自查完成（子代理不可用），
   下一轮如有条件，建议由独立审查子代理复核 `Themes/Common.xaml` 的模板三态完备性与新页面 XAML。
+
+
+---
+
+# 第 4 轮审查（提交 8d41960 / 657cbbf / c5d0151）
+
+审查者：**独立子代理**（只读，不改文件，anti-pattern 式对抗排查）+ 主代理自查。
+范围：深色背景 / 索引下拉 / 快照五列表三项修复，以及本轮新增的守卫规则。
+
+## 审查意见的核实（4 条成立、1 条不成立）
+
+| # | 审查意见 | 核实结果 | 处置 |
+|---|---|---|---|
+| B1 | 重写 `SnapshotView.xaml.cs` 时丢了父提交里的 `Localization.LanguageChanged += ApplyTexts`，页面被 MainViewModel 缓存 → 切语言时整页 chrome 停旧语言、VM 状态行已切新语言（中英混排） | **成立**（`git show 8d41960^:.../SnapshotView.xaml.cs` 确认原文件第 15 行有此订阅） | 已恢复订阅；并把 VM 的语言切换改为 `RelocalizeStatuses()` |
+| B2 | 五个页签共用 `IsFormOpen`/`ToggleFormCommand`：在"仓库"页签点新建会把另外三个表单一起展开 | **成立** | 拆成 4 个 bool + 带 `CommandParameter` 的 `ToggleFormCommand`；XAML 8 处绑定同步更新 |
+| B3 | `ComboTemplateHasEditableBox` 不可靠：`Contains` 一路搜到文件尾、只认字面量 `IsEditable="True"` | **成立** | 重写为 `XDocument` 解析：限定 ComboBox 模板自己的**名字域**（排除嵌套 ToggleButton 模板）、注释天然不算、`IsEditable` 识别放宽并排除显式 False；自检新增 3 个方向（注释/子模板/后面的模板） |
+| B4 | `LoadDictionary` 把 Zh+En 合成一个 key 集合，而"唯一跨词典规则只比数量" → 等量但不同 key 的词典会全过 | **不成立** | 守卫第 171 行 `i18n：zh_CN 与 en 词条完全对齐（无单边缺失）` 已经在做 `zh.Except(en)` / `en.Except(zh)` 集合差比对（`Program.cs:185-188`）。审查者漏看了这条已有规则 |
+| B5 | 宽松遍的"首段必须命中已有前缀"闸门会静默放过首段拼错的 key | **成立** | 去掉前缀闸门，改为显式白名单 `NotI18nLiterals()`（当前为空，说明 WPF 工程在更严规则下依然干净）；自检新增"首段拼错必须抓出"与"白名单不得用来掩盖真实词条"两条 |
+
+**关于 B4 的教训**：审查意见同样要核实，不能照单全收。5 条里混着 1 条不成立，
+如果直接按它去改守卫，反而会把一条已经正确的规则改坏。
+
+## 已处置的次要意见
+
+| 意见 | 处置 |
+|---|---|
+| Restore/Slm/Ilm 三条状态行不随语言切换 | 已修：抽出 `Update*Status()`，语言切换时 `RelocalizeStatuses()` 重算五条 |
+| `657cbbf` 去掉"错误态提前返回"后，语言切换会把 ES 错误文案覆盖成成功文案 | 已修：语言切换只重写**成功文案**，`IsError` 为真时保留 ES 原文（原文不需要翻译） |
+| `HostOf`：`type=SNAPSHOT` 的 `source` 没有 host/name → 恢复页"来源"列在主场景恒空 | 已修：回退到 `repository/snapshot`；补测试（第 3 个分片样本） |
+| `ParseRecovery` 缺 `ValueKind` 判断，根成员非对象时会抛 | 已修：补 `prop.Value.ValueKind != JsonValueKind.Object → continue` |
+| `RetentionText`/`Indices` 解析了却没有列显示；`PhaseCount`/`IsFailed`/`IsDone` 无人使用 | 已修：SLM 表格新增"保留"列（并收紧列宽）；恢复状态圆点改用 `IsDone`；删除 `PhaseCount`/`IsFailed`（本仓库不留死代码） |
+| 没有守卫规则保证新增窗口会套 `WindowBaseStyle` | 已修：新增第 18 项规则 + 自检两方向 + 对真实文件负向验证 |
+| `SelectedRepository` setter 的两处 fire-and-forget：`ReplaceAll` 会让 DataGrid 把 SelectedItem 推回 null → 每次刷新多一轮重复 GET 且互相竞争 | 已修：`_suppressSelectionReload` 标记 + 由 `LoadRepositoriesAsync` 统一收尾一次加载 |
+| `ApplyHeaders` 静默吞掉越界，且 XAML 无英文占位表头（与注释矛盾） | 部分接受：注释已改为"XAML 不放文案，全部由 code-behind 赋值"；越界仍选择静默跳过（对最终用户而言空表头优于崩溃），列数对齐由主代理脚本核对（3/7/9/8/5 与数组一一对应）。**遗留**：守卫尚未覆盖"列数 ↔ 表头数组"的一致性 |
+| 解析时格式化的文本（保留/统计/分片）缓存在模型上，切语言不会重解析 | **接受**：要彻底解决得把原始数值也放进模型并逐行格式化，代价与收益不成比例。缓解：下次刷新即恢复当前语言 |
+
+## 明确无法在本机验证（WPF 跑不了）
+
+- 新 ComboBox 模板运行期能否真正进入编辑态、z-order/命中测试是否符合预期（静态看路径正确：非编辑态 `content` 可见、输入框收起；编辑态相反，且输入框右侧留 28px 不遮挡箭头）。
+- **"缺 `PART_EditableTextBox`" 是否就是"下拉列表没有数据"的根因**：审查者对照 dotnet/wpf 的 ComboBox 实现后认为它解释不了"列表为空"——这一条我接受，见下。
+- 删除 `HasItems=False → 强制关 Popup` 是否确有必要（按阅读只影响"列表为空时点不开"这一情形，删掉更安全）。
+- ES 真实响应形状（`/_recovery` 的 `format` 参数、`/_ilm/policy` 是否带 `in_use_by`、SLM `next_execution_millis`）——本机无 ES，只有手写 fixture。
+
+## 结论
+
+- 深色背景：**成立**。诊断（隐式 `TargetType="Window"` 样式不作用于派生窗口）与修法（11 个窗口显式套样式 + MainWindow 直写 Background）都已在代码里闭环，并新增守卫防回归。
+- 索引下拉：**部分成立，且根因未完全证实**。缺 `PART_EditableTextBox` 是真实的模板契约违规（可编辑区确实坏），删除有副作用的触发器也合理，但**它解释不了"列表为空"** —— 加载/解析路径与旧代码功能等价。因此本轮的实际交付是"修好可编辑能力 + 让失败可见（数量/空态/错误原因 + 手动刷新按钮）"，而不是"已定位根因"。这一点已如实告知用户，并请其在 Windows 上复验。
+- 快照五列表：**成立**（B2 修掉后）。五个列表、按页签懒加载、`TabStatus` 独立报错都已具备；保留列已可见；恢复页"来源"列已能显示。

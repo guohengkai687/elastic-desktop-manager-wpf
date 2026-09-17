@@ -201,7 +201,7 @@ Common 用 `StaticResource` 引用令牌，令牌字典必须先合并，否则�
   Mapping/Settings 提取、Reindex/别名非法 JSON 统一抛 `EsException`。
 - 结果：**99 通过 / 0 失败**。
 
-### 静态守卫（`tests/binding-guard`，17 项）
+### 静态守卫（`tests/binding-guard`，18 项）
 | 规则 | 防的问题 |
 |---|---|
 | 只读属性 + 默认 TwoWay 目标 | `TextBox.Text` 等绑 `private set` → **运行期抛异常、编译零错误** |
@@ -217,6 +217,7 @@ Common 用 `StaticResource` 引用令牌，令牌字典必须先合并，否则�
 | **可编辑 ComboBox 模板必须含 `PART_EditableTextBox`** | 模板缺部件 → WPF 进不了编辑态，下拉不可用（第 4 轮的真实缺陷） |
 | **代码里用到的 i18n key 必须存在** | 漏词条 → 界面直接显示 `common.save` 这种 key（第 4 轮发现 2 处历史遗留） |
 | **zh/en 同一条词条的占位符必须一致** | 漏占位符 → 英文界面静默丢参数；多占位符 → `FormatException` 被吞后直接显示带 `{}` 的格式串 |
+| **每个 Window 根元素必须显式套用 `WindowBaseStyle`** | 新增窗口会静默退回系统白底（ADR-9 的护栏） |
 | 守卫自检（5 条） | **假绿**：规则失效却仍显示 PASS |
 
 **关键设计：守卫必须"能失败"**。每条新规则都配自检喂违规样本；本轮还修掉了一个真实误报（见下）。

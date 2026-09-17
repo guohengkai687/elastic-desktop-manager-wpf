@@ -90,15 +90,50 @@ public class SnapshotViewModel : PageViewModelBase
         }
     }
 
-    /// <summary>新建表单是否展开（默认收起，保持页面干净）。</summary>
-    private bool _isFormOpen;
-    public bool IsFormOpen
+    // 每个页签各自一个"新建表单是否展开"。
+    // 共用一个 bool 是错的：在"仓库"页签点新建会把快照/SLM/ILM 的表单也一起展开（切过去就在那儿），
+    // 任一处关闭又会全部收起 —— 与"每页签独立"的设计不符。
+    private bool _isRepoFormOpen;
+    public bool IsRepoFormOpen
     {
-        get => _isFormOpen;
-        set => SetProperty(ref _isFormOpen, value);
+        get => _isRepoFormOpen;
+        set => SetProperty(ref _isRepoFormOpen, value);
     }
 
+    private bool _isSnapshotFormOpen;
+    public bool IsSnapshotFormOpen
+    {
+        get => _isSnapshotFormOpen;
+        set => SetProperty(ref _isSnapshotFormOpen, value);
+    }
+
+    private bool _isSlmFormOpen;
+    public bool IsSlmFormOpen
+    {
+        get => _isSlmFormOpen;
+        set => SetProperty(ref _isSlmFormOpen, value);
+    }
+
+    private bool _isIlmFormOpen;
+    public bool IsIlmFormOpen
+    {
+        get => _isIlmFormOpen;
+        set => SetProperty(ref _isIlmFormOpen, value);
+    }
+
+    /// <summary>展开/收起某个页签的新建表单；CommandParameter 为页签标识（repo/snapshot/slm/ilm）。</summary>
     public ICommand ToggleFormCommand { get; }
+
+    private void ToggleForm(string? which)
+    {
+        switch (which)
+        {
+            case "repo": IsRepoFormOpen = !IsRepoFormOpen; break;
+            case "snapshot": IsSnapshotFormOpen = !IsSnapshotFormOpen; break;
+            case "slm": IsSlmFormOpen = !IsSlmFormOpen; break;
+            case "ilm": IsIlmFormOpen = !IsIlmFormOpen; break;
+        }
+    }
 
     // ================= ① 仓库 =================
 
@@ -143,12 +178,19 @@ public class SnapshotViewModel : PageViewModelBase
             if (!SetProperty(ref _selectedRepository, value)) return;
             OnPropertyChanged(nameof(HasRepository));
             OnPropertyChanged(nameof(RepositorySettingsJson));
+            if (_suppressSelectionReload) return; // 刷新列表期间由调用方统一收尾，避免重复 GET
             // 换仓库 → 快照列表与恢复页的快照下拉都必须跟着换
             Snapshots.ReplaceAll(Array.Empty<EsSnapshot>());
             _ = LoadSnapshotsAsync(silent: true);
             _ = LoadRestoreSnapshotsAsync();
         }
     }
+
+    /// <summary>
+    /// 刷新仓库列表时置位：`Repositories.ReplaceAll` 会让 DataGrid 把 SelectedItem 推回 null，
+    /// 那个 null 不是"用户取消选择"，不该触发一轮快照/恢复下拉的重复加载。
+    /// </summary>
+    private bool _suppressSelectionReload;
 
     public bool HasRepository => SelectedRepository is not null;
 
@@ -393,7 +435,7 @@ public class SnapshotViewModel : PageViewModelBase
 
     public SnapshotViewModel()
     {
-        ToggleFormCommand = new RelayCommand(_ => IsFormOpen = !IsFormOpen);
+        ToggleFormCommand = new RelayCommand(p => ToggleForm(p as string));
         RefreshCommand = new AsyncRelayCommand(_ => ReloadAsync());
         RefreshSlmCommand = new AsyncRelayCommand(_ => LoadSlmAsync());
         RefreshIlmCommand = new AsyncRelayCommand(_ => LoadIlmAsync());
@@ -427,8 +469,39 @@ public class SnapshotViewModel : PageViewModelBase
     private void OnLanguageChanged()
     {
         OnPropertyChanged(nameof(SnapshotDetail));
-        UpdateRepoStatus();
-        UpdateSnapshotStatus();
+        // 只重写"统计/空态"这类成功文案；错误文案是 ES 原文，不该被覆盖掉
+        RelocalizeStatuses();
+    }
+
+    /// <summary>语言切换后重算五条状态行（处于错误态的行保持原样，那是不需要翻译的 ES 原文）。</summary>
+    private void RelocalizeStatuses()
+    {
+        if (!RepoStatus.IsError) UpdateRepoStatus();
+        if (!SnapshotStatus.IsError) UpdateSnapshotStatus();
+        if (!RestoreStatus.IsError) UpdateRestoreStatus();
+        if (!SlmStatus.IsError) UpdateSlmStatus();
+        if (!IlmStatus.IsError) UpdateIlmStatus();
+    }
+
+    private void UpdateRestoreStatus()
+    {
+        RestoreStatus.Ok(RecoveryShards.Count > 0
+            ? Localization.L("snapshot.status.recovery", RecoveryShards.Count)
+            : Localization.L("snapshot.restore.none"));
+    }
+
+    private void UpdateSlmStatus()
+    {
+        SlmStatus.Ok(SlmPolicies.Count > 0
+            ? Localization.L("snapshot.status.slm", SlmPolicies.Count)
+            : Localization.L("snapshot.slm.empty"));
+    }
+
+    private void UpdateIlmStatus()
+    {
+        IlmStatus.Ok(IlmPolicies.Count > 0
+            ? Localization.L("snapshot.status.ilm", IlmPolicies.Count)
+            : Localization.L("snapshot.ilm.empty"));
     }
 
     private static string Message(Exception ex) => ex is EsException e ? e.Message : ex.Message;
@@ -476,18 +549,24 @@ public class SnapshotViewModel : PageViewModelBase
             var repos = EsParsers.ParseSnapshotRepositories(json);
 
             string? previous = SelectedRepository?.Name;
+            _suppressSelectionReload = true;
             Repositories.ReplaceAll(repos);
-
             // 保持原选中项（按名称），否则默认选第一个
             var keep = previous is null ? null : repos.FirstOrDefault(r => r.Name == previous);
             SelectedRepository = keep ?? repos.FirstOrDefault();
+            _suppressSelectionReload = false;
+
             // 恢复页的仓库下拉默认跟随
             if (RestoreRepository is null) RestoreRepository = SelectedRepository;
             if (NewSlmRepository is null) NewSlmRepository = SelectedRepository;
             UpdateRepoStatus();
+            // 选中项由这里统一收尾：换仓库时刷新快照列表（替换集合会触发一次，但这里保证"没换仓库"也能刷到最新）
+            await LoadSnapshotsAsync(silent: true);
+            await LoadRestoreSnapshotsAsync();
         }
         catch (Exception ex)
         {
+            _suppressSelectionReload = false;
             RepoStatus.Fail(Message(ex));
         }
     }
@@ -574,9 +653,7 @@ public class SnapshotViewModel : PageViewModelBase
             string json = await Client.GetRecoveryStatusAsync();
             var rows = EsParsers.ParseRecovery(json);
             RecoveryShards.ReplaceAll(rows);
-            RestoreStatus.Ok(rows.Count > 0
-                ? Localization.L("snapshot.status.recovery", rows.Count)
-                : Localization.L("snapshot.restore.none"));
+            UpdateRestoreStatus();
         }
         catch (Exception ex)
         {
@@ -600,9 +677,7 @@ public class SnapshotViewModel : PageViewModelBase
                 : list.FirstOrDefault(p => p.PolicyId == previous) ?? list.FirstOrDefault();
             if (NewSlmRepository is null) NewSlmRepository = SelectedRepository;
 
-            SlmStatus.Ok(list.Count > 0
-                ? Localization.L("snapshot.status.slm", list.Count)
-                : Localization.L("snapshot.slm.empty"));
+            UpdateSlmStatus();
         }
         catch (Exception ex)
         {
@@ -625,9 +700,7 @@ public class SnapshotViewModel : PageViewModelBase
                 ? list.FirstOrDefault()
                 : list.FirstOrDefault(p => p.PolicyId == previous) ?? list.FirstOrDefault();
 
-            IlmStatus.Ok(list.Count > 0
-                ? Localization.L("snapshot.status.ilm", list.Count)
-                : Localization.L("snapshot.ilm.empty"));
+            UpdateIlmStatus();
         }
         catch (Exception ex)
         {
