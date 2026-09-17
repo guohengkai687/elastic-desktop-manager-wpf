@@ -65,12 +65,14 @@ public class RestViewModel : PageViewModelBase
     public AsyncRelayCommand ExecuteCommand { get; }
     public ICommand FormatCommand { get; }
     public ICommand OpenHistoryCommand { get; }
+    public ICommand OpenExamplesCommand { get; }
 
     public RestViewModel()
     {
         ExecuteCommand = new AsyncRelayCommand(_ => ExecuteAsync(), _ => CanExecute);
         FormatCommand = new RelayCommand(_ => FormatBody());
         OpenHistoryCommand = new RelayCommand(_ => Ui.ShowRestHistory());
+        OpenExamplesCommand = new RelayCommand(_ => Ui.ShowEsExamples());
     }
 
     public override async Task ReloadAsync()
@@ -84,6 +86,14 @@ public class RestViewModel : PageViewModelBase
         if (!string.IsNullOrEmpty(item.Method)) Method = item.Method;
         if (!string.IsNullOrEmpty(item.Command)) Path = item.Command;
         Body = item.CommandValue ?? "";
+    }
+
+    /// <summary>从查询示例回填方法 / 路径 / 请求体。</summary>
+    public void LoadFromExample(string method, string path, string body)
+    {
+        if (!string.IsNullOrEmpty(method)) Method = method;
+        Path = path ?? "";
+        Body = body ?? "";
     }
 
     private async Task ExecuteAsync()

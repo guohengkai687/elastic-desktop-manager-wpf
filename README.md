@@ -15,13 +15,37 @@
 | 节点 | `_cat/nodes` 全字段表格，可按名称/IP 过滤 |
 | 分片 | `_cat/shards` 表格 + 状态统计 |
 | 索引 | 列表（分页/搜索）、健康色点、详情/状态查看、刷新/Flush/清缓存/打开/关闭 |
-| REST API | 任意方法/路径/请求体执行、JSON 格式化、响应美化、历史记录（100 条） |
+| REST API | 任意方法/路径/请求体执行、JSON 格式化、响应美化、历史记录（100 条）、**ES 查询示例一键回填** |
 | SQL 查询 | `/_sql` 执行、fetch_size 游标分页、表格/JSON 双视图、CSV 导出 |
 | 搜索 | 图形化条件构建器（must/should/must_not/filter × term/match/wildcard/prefix/range/exists）→ 生成 DSL，结果表格/JSON，支持按查询更新（需填写 Painless 更新脚本）/按查询删除 |
 | 设置 | 语言（简中/English）、主题（浅色/深色/跟随系统）、请求超时、关闭行为 |
 | 关于 | 版本与项目信息 |
 
 进入 **节点 / 分片 / 索引** 等页面时会自动刷新一次数据（静默模式：不占全局忙碌条、失败不弹模态错误框，避免多页同时刷新时刷屏）；手动「刷新」按钮仍会显示忙碌与错误提示。连接建立或断开时，所有已打开的页面会同步刷新连接状态。
+
+## ES 查询示例（REST API 页）
+
+REST API 页工具栏的 **ES 查询示例** 按钮会打开示例窗口，内置常用查询 DSL，可一键回填到方法 / 路径 / 请求体：
+
+| 分类 | 示例 |
+| --- | --- |
+| 全文匹配 (match) | `match`、`match_phrase`、`multi_match` |
+| 精确匹配 (term) | `term`、`terms`、`ids`、`exists` |
+| 范围查询 (range) | 数值 `range`、日期 `range`（`now-7d/d`） |
+| 组合查询 (bool) | `bool`（must/filter/must_not/should）、`wildcard` |
+| 排序与分页 | 多字段 `sort`、`_source` 字段过滤 |
+| 聚合统计 (aggs) | `terms` 聚合、`stats` 聚合 + 子聚合 |
+| 写入与修改 | 写入文档、更新文档、`_bulk`、`_delete_by_query` |
+| 索引管理 | `_cat/indices?v`、`_mapping` |
+
+使用方式：
+
+1. 打开示例窗口，左侧按分类列出示例，可用顶部输入框按**标题 / 说明 / 方法 / 路径 / 正文**模糊筛选。
+2. 选中示例后，右侧显示将写入的 **方法 / 路径 / 请求体** 预览。
+3. **索引名** 输入框用于替换示例中的 `{index}` 占位符（留空则用 `index_name`）；预览会实时更新。
+4. 点 **应用** 回填到 REST 页并关闭窗口（方法、路径、请求体三者一起替换）。
+
+> 示例中的 `{index}` 会按你填写的索引名替换；`_bulk` 示例是 NDJSON（每两行为一组，行尾需换行），批量写 `_bulk` 时索引名直接写在正文里。
 
 ## SQL 查询页使用说明
 
@@ -53,7 +77,7 @@
 ```
 elastic-desktop-manager-wpf/
 ├── src/ElasticDesktopManager.Core/     net8.0 类库（无 UI 依赖，Linux 可测）
-│   ├── Es/        EsClient（SSL/认证/超时/REST 调用）、EsParsers、EsSession、EsException
+│   ├── Es/        EsClient（SSL/认证/超时/REST 调用）、EsParsers、EsSession、EsException、EsQueryHelper、EsQueryExample（内置查询示例目录）
 │   ├── Models/    ConfigProperty（含 Scheme/SkipSslVerify）、SettingProperty、ES 数据模型
 │   ├── Services/  ConfigService / SettingService / CommandHistoryService（JSON 存储）
 │   ├── I18n/      Localization（zh_CN 默认 + en）

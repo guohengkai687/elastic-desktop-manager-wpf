@@ -42,6 +42,11 @@ void True(bool cond, string context)
     if (!cond) throw new Exception($"{context}: expected true");
 }
 
+void False(bool cond, string context)
+{
+    if (cond) throw new Exception($"{context}: expected false");
+}
+
 void Contains(string haystack, string needle, string context)
 {
     if (!haystack.Contains(needle, StringComparison.Ordinal))
@@ -454,6 +459,148 @@ Test("请求: GET 携带请求体不被丢弃（P2-6 回归）", () =>
     Exec(c => c.ExecuteRestAsync("GET", "/_search", "{\"query\":{\"match_all\":{}}}"), new ConfigProperty { Servers = "localhost:9200" }, handler);
     True(captured!.Content is not null, "GET body attached");
     Contains(content!, "match_all", "body content");
+});
+
+// ============================================================
+// ES 查询示例（REST 页「ES 查询示例」功能）
+// ============================================================
+
+Test("查询示例: 目录非空且含 term/match/range 常用查询", () =>
+{
+    var examples = EsQueryExampleCatalog.Examples;
+    True(examples.Count >= 15, $"at least 15 examples, got {examples.Count}");
+
+    var categories = EsQueryExampleCatalog.Categories;
+    True(categories.Contains("term"), "term category present");
+    True(categories.Contains("match"), "match category present");
+    True(categories.Contains("range"), "range category present");
+    True(categories.Contains("bool"), "bool category present");
+    True(categories.Contains("agg"), "agg category present");
+});
+
+Test("查询示例: 每条示例的 method/path 合法、body 为合法 JSON 或空", () =>
+{
+    foreach (var ex in EsQueryExampleCatalog.Examples)
+    {
+        True(!string.IsNullOrWhiteSpace(ex.TitleKey), $"{ex.TitleKey}: title key");
+        True(!string.IsNullOrWhiteSpace(ex.DescKey), $"{ex.TitleKey}: desc key");
+        True(ex.Method is "GET" or "POST" or "PUT" or "PATCH" or "DELETE",
+            $"{ex.TitleKey}: valid method, got {ex.Method}");
+        True(ex.Path.StartsWith('/'), $"{ex.TitleKey}: path starts with '/', got {ex.Path}");
+
+        if (string.IsNullOrWhiteSpace(ex.Body)) continue;
+        // 带 {index} 占位符时先替换再校验，避免占位符处在 JSON 字符串里造成误判
+        var materialized = EsQueryExampleCatalog.Materialize(ex, EsQueryExampleCatalog.DefaultIndex).Body;
+
+        // _bulk 是 NDJSON（每行一个 JSON），按行校验而非整体解析
+        if (ex.Path == "/_bulk")
+        {
+            var lines = materialized.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            True(lines.Length >= 2, $"{ex.TitleKey}: bulk has >=2 lines, got {lines.Length}");
+            Eq(0, lines.Length % 2, $"{ex.TitleKey}: bulk lines come in pairs");
+            foreach (var line in lines)
+            {
+                try
+                {
+                    using var _ = JsonDocument.Parse(line);
+                }
+                catch (Exception e)
+                {
+                    throw new Exception($"{ex.TitleKey}: bulk line is not valid JSON => {e.Message}");
+                }
+            }
+            continue;
+        }
+
+        try
+        {
+            using var _ = JsonDocument.Parse(materialized);
+        }
+        catch (Exception e)
+        {
+            throw new Exception($"{ex.TitleKey}: body is not valid JSON => {e.Message}");
+        }
+    }
+});
+
+Test("查询示例: i18n key 均已在 zh/en 词典中定义", () =>
+{
+    // L() 查不到时原样返回 key —— 以此判定缺词条；中英都要有
+    void AssertTranslated(string key, string what)
+    {
+        var zh = Localization.L(key);
+        if (zh == key || string.IsNullOrWhiteSpace(zh))
+            throw new Exception($"{what}: zh_CN 缺少词条 <{key}>");
+
+        Localization.SetLanguage("en");
+        var en = Localization.L(key);
+        Localization.SetLanguage("zh_CN");
+        if (en == key || string.IsNullOrWhiteSpace(en))
+            throw new Exception($"{what}: en 缺少词条 <{key}>");
+    }
+
+    foreach (var ex in EsQueryExampleCatalog.Examples)
+    {
+        AssertTranslated(ex.TitleKey, "title");
+        AssertTranslated(ex.DescKey, "desc");
+    }
+    foreach (var cat in EsQueryExampleCatalog.Categories)
+        AssertTranslated($"rest.example.cat.{cat}", "category");
+});
+
+Test("查询示例: {index} 占位符按索引名替换", () =>
+{
+    var term = EsQueryExampleCatalog.Examples.First(x => x.TitleKey == "rest.example.term.title");
+    var (method, path, body) = EsQueryExampleCatalog.Materialize(term, "my-index");
+    Eq("POST", method, "method preserved");
+    Eq("/my-index/_search", path, "path index replaced");
+    True(!body.Contains("{index}"), "body placeholder replaced");
+    Contains(body, "\"term\"", "term clause kept");
+});
+
+Test("查询示例: 索引名为空/空白时回退到默认索引名", () =>
+{
+    var term = EsQueryExampleCatalog.Examples.First(x => x.TitleKey == "rest.example.term.title");
+    foreach (var blank in new[] { null, "", "   " })
+    {
+        var (_, path, _) = EsQueryExampleCatalog.Materialize(term, blank);
+        Eq($"/{EsQueryExampleCatalog.DefaultIndex}/_search", path, $"blank index ({blank ?? "null"}) falls back");
+    }
+});
+
+Test("查询示例: 索引名前后空白被裁剪（不产生非法路径）", () =>
+{
+    var term = EsQueryExampleCatalog.Examples.First(x => x.TitleKey == "rest.example.term.title");
+    var (_, path, _) = EsQueryExampleCatalog.Materialize(term, "  logs-2026  ");
+    Eq("/logs-2026/_search", path, "index name trimmed");
+});
+
+Test("查询示例: 无占位符的示例（_cat/indices）替换后原样不变", () =>
+{
+    var cat = EsQueryExampleCatalog.Examples.First(x => x.TitleKey == "rest.example.catIndices.title");
+    False(cat.HasIndexPlaceholder, "no placeholder");
+    var (method, path, body) = EsQueryExampleCatalog.Materialize(cat, "whatever");
+    Eq("GET", method, "method");
+    Eq("/_cat/indices?v", path, "path untouched");
+    Eq("", body, "no body");
+});
+
+Test("查询示例: ByCategory 只返回该分类且保持内置顺序", () =>
+{
+    var terms = EsQueryExampleCatalog.ByCategory("term");
+    True(terms.Count >= 2, $"term has >=2 examples, got {terms.Count}");
+    True(terms.All(x => x.Category == "term"), "all in term category");
+
+    // 分类顺序稳定（同一调用两次结果一致）
+    var a = EsQueryExampleCatalog.Categories;
+    var b = EsQueryExampleCatalog.Categories;
+    Eq(string.Join(",", a), string.Join(",", b), "category order stable");
+});
+
+Test("查询示例: 每条示例的 TitleKey 唯一（避免界面出现重复项）", () =>
+{
+    var keys = EsQueryExampleCatalog.Examples.Select(x => x.TitleKey).ToList();
+    Eq(keys.Count, keys.Distinct().Count(), "title keys unique");
 });
 
 // ------------------------------------------------------------

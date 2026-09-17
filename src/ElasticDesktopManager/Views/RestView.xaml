@@ -20,6 +20,7 @@
             </Grid.ColumnDefinitions>
             <TextBlock x:Name="TitleText" Style="{StaticResource PageTitleStyle}" />
             <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button x:Name="ExamplesButton" Margin="0,0,8,0" Click="OnExamples" />
                 <Button x:Name="FormatButton" Margin="0,0,8,0" Click="OnFormat" />
                 <Button x:Name="HistoryButton" Margin="0,0,8,0" Click="OnHistory" />
                 <Button x:Name="ExecuteButton" Style="{StaticResource AccentButtonStyle}" Width="96"

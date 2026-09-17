@@ -16,6 +16,7 @@ public partial class RestView : UserControl
             BodyLabel.Text = Localization.L("rest.body");
             ResultLabel.Text = Localization.L("rest.result");
             NoDataHint.Text = Localization.L("rest.noData");
+            ExamplesButton.Content = Localization.L("rest.examples");
             FormatButton.Content = Localization.L("rest.format");
             HistoryButton.Content = Localization.L("rest.history");
             ExecuteButton.Content = Localization.L("rest.execute");
@@ -32,6 +33,12 @@ public partial class RestView : UserControl
     {
         if (DataContext is RestViewModel vm)
             vm.FormatCommand.Execute(null);
+    }
+
+    private void OnExamples(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is RestViewModel vm)
+            vm.OpenExamplesCommand.Execute(null);
     }
 
     private void OnHistory(object sender, RoutedEventArgs e)

@@ -23,6 +23,8 @@ public static class Ui
 
     public static void ShowRestHistory() => new RestHistoryWindow { Owner = Main }.ShowDialog();
 
+    public static void ShowEsExamples() => new EsExamplesWindow { Owner = Main }.ShowDialog();
+
     // ---------- 消息 ----------
     public static void Error(Window? owner, string message)
         => MessageBox.Show(owner ?? Main, message, Localization.L("common.error"), MessageBoxButton.OK, MessageBoxImage.Error);
