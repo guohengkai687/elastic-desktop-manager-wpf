@@ -69,7 +69,7 @@
         <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="Padding" Value="14,6" />
-        <Setter Property="MinHeight" Value="{StaticResource ControlHeight}" />
+        <Setter Property="MinHeight" Value="{DynamicResource ControlHeight}" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="SnapsToDevicePixels" Value="True" />
         <Setter Property="Template">
@@ -78,7 +78,7 @@
                     <Border x:Name="bd" Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="{StaticResource RadiusSm}"
+                            CornerRadius="{DynamicResource ControlRadius}"
                             Padding="{TemplateBinding Padding}">
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
@@ -113,7 +113,7 @@
                 <ControlTemplate TargetType="Button">
                     <Border x:Name="bd" Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1"
-                            CornerRadius="{StaticResource RadiusSm}"
+                            CornerRadius="{DynamicResource ControlRadius}"
                             Padding="{TemplateBinding Padding}">
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
@@ -144,7 +144,7 @@
                 <ControlTemplate TargetType="Button">
                     <Border x:Name="bd" Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1"
-                            CornerRadius="{StaticResource RadiusSm}"
+                            CornerRadius="{DynamicResource ControlRadius}"
                             Padding="{TemplateBinding Padding}">
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
@@ -173,7 +173,7 @@
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
                     <Border x:Name="bd" Background="{TemplateBinding Background}"
-                            CornerRadius="{StaticResource RadiusSm}" Padding="{TemplateBinding Padding}">
+                            CornerRadius="{DynamicResource ControlRadius}" Padding="{TemplateBinding Padding}">
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
                     <ControlTemplate.Triggers>
@@ -204,7 +204,7 @@
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
                     <Border x:Name="bd" Background="{TemplateBinding Background}"
-                            CornerRadius="{StaticResource RadiusSm}"
+                            CornerRadius="{DynamicResource ControlRadius}"
                             Padding="{TemplateBinding Padding}">
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
@@ -233,7 +233,7 @@
         <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="Padding" Value="9,5" />
-        <Setter Property="MinHeight" Value="{StaticResource ControlHeight}" />
+        <Setter Property="MinHeight" Value="{DynamicResource ControlHeight}" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
         <Setter Property="SelectionBrush" Value="{DynamicResource AccentBrush}" />
         <Setter Property="CaretBrush" Value="{DynamicResource TextPrimaryBrush}" />
@@ -243,7 +243,7 @@
                     <Border x:Name="bd" Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="{StaticResource RadiusSm}">
+                            CornerRadius="{DynamicResource ControlRadius}">
                         <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"
                                       VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
                                       Focusable="False" HorizontalScrollBarVisibility="Hidden"
@@ -274,7 +274,7 @@
         <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="Padding" Value="9,5" />
-        <Setter Property="MinHeight" Value="{StaticResource ControlHeight}" />
+        <Setter Property="MinHeight" Value="{DynamicResource ControlHeight}" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
         <Setter Property="CaretBrush" Value="{DynamicResource TextPrimaryBrush}" />
         <Setter Property="SelectionBrush" Value="{DynamicResource AccentBrush}" />
@@ -284,7 +284,7 @@
                     <Border x:Name="bd" Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="{StaticResource RadiusSm}">
+                            CornerRadius="{DynamicResource ControlRadius}">
                         <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"
                                       VerticalAlignment="Center" Focusable="False" />
                     </Border>
@@ -332,7 +332,7 @@
 
     <Style TargetType="ComboBox">
         <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
-        <Setter Property="MinHeight" Value="{StaticResource ControlHeight}" />
+        <Setter Property="MinHeight" Value="{DynamicResource ControlHeight}" />
         <Setter Property="Padding" Value="9,5" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="SnapsToDevicePixels" Value="True" />
@@ -346,7 +346,7 @@
                                 <ControlTemplate TargetType="ToggleButton">
                                     <Border x:Name="bd" Background="{DynamicResource SurfaceBrush}"
                                             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
-                                            CornerRadius="{StaticResource RadiusSm}">
+                                            CornerRadius="{DynamicResource ControlRadius}">
                                         <Path x:Name="arrow" HorizontalAlignment="Right" VerticalAlignment="Center"
                                               Margin="0,0,11,0" Data="M 0,0 L 4.5,4.5 L 9,0"
                                               Stroke="{DynamicResource TextSecondaryBrush}" StrokeThickness="1.5"
@@ -378,8 +378,8 @@
                                     MaxHeight="{TemplateBinding MaxDropDownHeight}" Margin="0,4,0,0"
                                     Background="{DynamicResource SurfaceRaisedBrush}"
                                     BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="1"
-                                    CornerRadius="{StaticResource RadiusMd}"
-                                    Effect="{StaticResource ShadowMd}">
+                                    CornerRadius="{DynamicResource CardRadius}"
+                                    Effect="{DynamicResource ShadowMd}">
                                 <ScrollViewer Margin="0,4">
                                     <ItemsPresenter />
                                 </ScrollViewer>
@@ -495,7 +495,7 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ListBoxItem">
-                    <Border x:Name="bd" Background="Transparent" CornerRadius="{StaticResource RadiusSm}"
+                    <Border x:Name="bd" Background="Transparent" CornerRadius="{DynamicResource ControlRadius}"
                             Padding="{TemplateBinding Padding}">
                         <ContentPresenter />
                     </Border>
@@ -526,7 +526,7 @@
             <Setter.Value>
                 <ControlTemplate TargetType="ListBoxItem">
                     <Grid>
-                        <Border x:Name="bd" Background="Transparent" CornerRadius="{StaticResource RadiusSm}"
+                        <Border x:Name="bd" Background="Transparent" CornerRadius="{DynamicResource ControlRadius}"
                                 Padding="{TemplateBinding Padding}">
                             <ContentPresenter />
                         </Border>
@@ -581,7 +581,7 @@
             <Setter.Value>
                 <ControlTemplate TargetType="TabItem">
                     <Grid>
-                        <Border x:Name="bd" Background="Transparent" CornerRadius="{StaticResource RadiusSm}"
+                        <Border x:Name="bd" Background="Transparent" CornerRadius="{DynamicResource ControlRadius}"
                                 Padding="{TemplateBinding Padding}" Margin="0,0,4,0">
                             <ContentPresenter ContentSource="Header" VerticalAlignment="Center"
                                               HorizontalAlignment="Center" />
@@ -790,9 +790,9 @@
                     <Border Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="{StaticResource RadiusSm}"
+                            CornerRadius="{DynamicResource ControlRadius}"
                             Padding="{TemplateBinding Padding}"
-                            Effect="{StaticResource ShadowSm}">
+                            Effect="{DynamicResource ShadowSm}">
                         <ContentPresenter />
                     </Border>
                 </ControlTemplate>
@@ -819,7 +819,7 @@
                             <ToggleButton.Template>
                                 <ControlTemplate TargetType="ToggleButton">
                                     <Border x:Name="hbd" Background="Transparent"
-                                            CornerRadius="{StaticResource RadiusSm}" Padding="8,7">
+                                            CornerRadius="{DynamicResource ControlRadius}" Padding="8,7">
                                         <Grid>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="20" />
@@ -859,20 +859,20 @@
         </Setter>
     </Style>
 
-    <!-- 卡片 -->
+    <!-- 卡片：圆角与内边距随主题（浅色更圆更松，深色更方更紧） -->
     <Style x:Key="CardStyle" TargetType="Border">
         <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
         <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
-        <Setter Property="Padding" Value="{StaticResource Space4}" />
+        <Setter Property="CornerRadius" Value="{DynamicResource CardRadius}" />
+        <Setter Property="Padding" Value="{DynamicResource CardPadding}" />
         <Setter Property="SnapsToDevicePixels" Value="True" />
     </Style>
 
     <!-- 浮起的卡片（带阴影，用于连接卡片/统计卡） -->
     <Style x:Key="RaisedCardStyle" TargetType="Border" BasedOn="{StaticResource CardStyle}">
         <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
-        <Setter Property="Effect" Value="{StaticResource ShadowSm}" />
+        <Setter Property="Effect" Value="{DynamicResource ShadowSm}" />
     </Style>
 
     <!-- 分隔线 -->
@@ -886,5 +886,69 @@
         <Setter Property="CornerRadius" Value="{StaticResource RadiusPill}" />
         <Setter Property="Padding" Value="9,3" />
         <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- ================= 排版与图标（现代精致 UI 的复用件）================= -->
+
+    <!-- 页面副标题：跟在 PageTitleStyle 后面的说明文字 -->
+    <Style x:Key="PageSubtitleStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="{StaticResource FontSm}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- 统计卡：标签 + 大号数值（KPI） -->
+    <Style x:Key="StatLabelStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="{StaticResource FontSm}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <Style x:Key="StatValueStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="{StaticResource FontXxl}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+        <Setter Property="Margin" Value="0,6,0,0" />
+    </Style>
+
+    <!-- 导航分组标题：小号、次要色，不可交互 -->
+    <Style x:Key="NavGroupLabelStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="{StaticResource FontXs}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource DimTextBrush}" />
+        <Setter Property="Margin" Value="0,10,0,4" />
+    </Style>
+
+    <!--
+      矢量图标样式：几何按 24×24 视图框绘制，Stretch=None → 不做任何缩放/位移，
+      因此各图标的相对大小与留白天然一致（Stretch=Uniform 会把 V 形箭头拉成方形）。
+      描边色由使用处指定（导航里绑定到 ListBoxItem 的 Foreground，随选中态变化）。
+    -->
+    <Style x:Key="IconPathStyle" TargetType="Path">
+        <Setter Property="Width" Value="24" />
+        <Setter Property="Height" Value="24" />
+        <Setter Property="Stretch" Value="None" />
+        <Setter Property="StrokeThickness" Value="1.7" />
+        <Setter Property="StrokeLineJoin" Value="Round" />
+        <Setter Property="StrokeStartLineCap" Value="Round" />
+        <Setter Property="StrokeEndLineCap" Value="Round" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!--
+      小尺寸图标（按钮内）：
+      用 LayoutTransform 等比缩小，**不要**用 Stretch=Uniform ——
+      Uniform 会把每个图标按其自身包围盒拉满方框，V 形箭头（10×5）会被拉成大方块并变形。
+      LayoutTransform 不影响几何比例，同时会缩放描边，故把 StrokeThickness 按比例补回来。
+    -->
+    <Style x:Key="IconPathSmallStyle" TargetType="Path" BasedOn="{StaticResource IconPathStyle}">
+        <Setter Property="StrokeThickness" Value="2.3" />
+        <Setter Property="LayoutTransform">
+            <Setter.Value>
+                <ScaleTransform ScaleX="0.75" ScaleY="0.75" />
+            </Setter.Value>
+        </Setter>
     </Style>
 </ResourceDictionary>

@@ -429,7 +429,9 @@ static List<string> FindTokenTypeMismatches(string xaml, string label, Dictionar
     {
         foreach (var attr in el.Attributes())
         {
-            var m = Regex.Match(attr.Value.Trim(), @"^\{StaticResource\s+([A-Za-z_]\w*)\s*\}$");
+            // StaticResource 与 DynamicResource 都要查：主题风格令牌（圆角/密度/阴影）
+            // 只能用 DynamicResource，类型错了照样是运行期崩溃。
+            var m = Regex.Match(attr.Value.Trim(), @"^\{(?:Static|Dynamic)Resource\s+([A-Za-z_]\w*)\s*\}$");
             if (!m.Success) continue;
             string key = m.Groups[1].Value;
             if (!tokenTypes.TryGetValue(key, out string? tokenType)) continue; // 非设计令牌（如 Style 资源）→ 不管
@@ -455,11 +457,26 @@ static List<string> FindTokenTypeMismatches(string xaml, string label, Dictionar
     return hits;
 }
 
-static Dictionary<string, string> TokenTypeMap(string tokensPath)
+static Dictionary<string, string> TokenTypeMap(params string[] tokensPaths)
 {
     var map = new Dictionary<string, string>(StringComparer.Ordinal);
     var xns = XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml");
-    foreach (var el in XDocument.Load(tokensPath).Descendants())
+    foreach (var path in tokensPaths)
+    {
+        foreach (var el in XDocument.Load(path).Descendants())
+        {
+            var key = (string?)el.Attribute(xns + "Key");
+            if (key is not null) map[key] = el.Name.LocalName;
+        }
+    }
+    return map;
+}
+
+static Dictionary<string, string> TokenTypeMapOfXml(string xaml)
+{
+    var map = new Dictionary<string, string>(StringComparer.Ordinal);
+    var xns = XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml");
+    foreach (var el in XDocument.Parse(xaml).Descendants())
     {
         var key = (string?)el.Attribute(xns + "Key");
         if (key is not null) map[key] = el.Name.LocalName;
@@ -468,10 +485,27 @@ static Dictionary<string, string> TokenTypeMap(string tokensPath)
 }
 
 // ---- 规则：令牌类型必须匹配（Double 用于 GridLength/Thickness 会崩）----
-Check("令牌：设计令牌的声明类型与目标属性类型匹配", () =>
+Check("令牌：设计令牌的声明类型与目标属性类型匹配（Static/Dynamic 都查）", () =>
 {
-    var tokenTypes = TokenTypeMap(Path.Combine(repoRoot, "src", "ElasticDesktopManager", "Themes", "Tokens.xaml"));
-    if (tokenTypes.Count == 0) throw new Exception("Tokens.xaml 未解析到任何令牌 —— 守卫失效");
+    string tokens = Path.Combine(repoRoot, "src", "ElasticDesktopManager", "Themes", "Tokens.xaml");
+    string light = Path.Combine(repoRoot, "src", "ElasticDesktopManager", "Themes", "Light.xaml");
+    string dark = Path.Combine(repoRoot, "src", "ElasticDesktopManager", "Themes", "Dark.xaml");
+
+    // 令牌可能定义在令牌层，也可能定义在主题层（风格令牌随主题变化），两处都要纳入
+    var tokenTypes = TokenTypeMap(tokens, light, dark);
+    if (tokenTypes.Count == 0) throw new Exception("未解析到任何令牌 —— 守卫失效");
+
+    // 两套主题对同一个 key 必须声明成**同一类型**：
+    // 例如 Light 把 ControlHeight 写成 sys:Double、Dark 写成 Thickness，
+    // 切换主题时就会出现"一个主题正常、另一个主题崩溃"，而只查 key 名的一致性规则查不出来。
+    var lightTypes = TokenTypeMapOfXml(File.ReadAllText(light));
+    var darkTypes = TokenTypeMapOfXml(File.ReadAllText(dark));
+    var typeConflicts = lightTypes
+        .Where(kv => darkTypes.TryGetValue(kv.Key, out var t) && t != kv.Value)
+        .Select(kv => $"{kv.Key}: Light={kv.Value} vs Dark={darkTypes[kv.Key]}")
+        .ToList();
+    if (typeConflicts.Count > 0)
+        throw new Exception("两套主题同名令牌类型不一致：\n    " + string.Join("\n    ", typeConflicts));
 
     var hits = new List<string>();
     foreach (var f in Directory.GetFiles(viewsDir, "*.xaml", SearchOption.AllDirectories)
@@ -544,6 +578,175 @@ Check("守卫自检：令牌类型不匹配必须能被抓出（且不误报）"
     // 必须失败：XAML 解析失败不能被静默吞掉（否则规则会假绿）
     if (FindTokenTypeMismatches("<a><b></a>", "t", tokens).Count != 1)
         throw new Exception("XAML 解析失败被静默跳过 —— 规则可能假绿");
+});
+
+// ============================================================
+// 规则：被 XAML 绑定的“只读派生属性”必须在依赖变化时发通知
+//
+// 背景（真实线上缺陷）：ConnectionsViewModel.CanConnect => Selected is { IsFolder: false }，
+// 而 Selected 的 setter 只通知了 HasSelection、漏了 CanConnect →
+// 选中集群后「连接」按钮永远停在初始 IsEnabled=false（编辑/删除按钮却正常亮起，
+// 因为 HasSelection 通知了），只有双击才能连上（双击直接 Execute，绕过 IsEnabled）。
+// 根因：WPF 绑定只在收到**该属性自己**的 PropertyChanged 时重新求值，
+// "派生属性没通知" = 界面永久停在旧值；编译期与运行期都不报错。
+// ============================================================
+
+// 有 set 访问器的属性（可变 → 运行期会变、需要通知）
+// 注意：init-only 不算可变 —— 它只能在对象初始化时赋值，构造完成后永不改变，
+// 因此派生属性无需通知（NavItem.IconPath / ConnectionTreeNode.Item 都属于这种）。
+static HashSet<string> MutableProperties(string source)
+{
+    var set = new HashSet<string>(StringComparer.Ordinal);
+    var pattern = @"public\s+(?<mods>(?:required\s+|static\s+|override\s+|virtual\s+|sealed\s+|new\s+)*)"
+                + @"(?<type>[\w\?<>\[\],\.]+)\s+(?<name>\w+)\s*\{(?<body>[^{}]*(?:\{[^{}]*\}[^{}]*)*)\}";
+    foreach (Match m in Regex.Matches(source, pattern, RegexOptions.Multiline))
+    {
+        if (Regex.IsMatch(m.Groups["type"].Value, @"\b(class|record|struct|interface|enum|namespace)\b")) continue;
+        string body = m.Groups["body"].Value;
+        if (!Regex.IsMatch(body, @"\bget\b")) continue;
+        bool hasInit = Regex.IsMatch(body, @"(?:^|[^\w])init\b");
+        bool hasSet = Regex.IsMatch(body, @"(?:^|[^\w])set\b");
+        if (hasSet && !hasInit) set.Add(m.Groups["name"].Value);
+    }
+    return set;
+}
+
+// 只读属性 → getter 体（表达式体 + 仅 get 的块体）
+static Dictionary<string, string> ReadOnlyGetterBodies(string source)
+{
+    var map = new Dictionary<string, string>(StringComparer.Ordinal);
+    var mods = @"(?:required\s+|static\s+|override\s+|virtual\s+|sealed\s+|new\s+)*";
+
+    foreach (Match m in Regex.Matches(source,
+        $@"public\s+{mods}[\w\?<>\[\],\.]+\s+(?<name>\w+)\s*=>\s*(?<body>[^;]+);", RegexOptions.Multiline))
+        map[m.Groups["name"].Value] = m.Groups["body"].Value;
+
+    var blockPattern = $@"public\s+{mods}(?<type>[\w\?<>\[\],\.]+)\s+(?<name>\w+)\s*\{{(?<body>[^{{]*(?:\{{[^{{}}]*\}}[^{{}}]*)*)\}}";
+    foreach (Match m in Regex.Matches(source, blockPattern, RegexOptions.Multiline))
+    {
+        if (Regex.IsMatch(m.Groups["type"].Value, @"\b(class|record|struct|interface|enum|namespace)\b")) continue;
+        string body = m.Groups["body"].Value;
+        if (Regex.IsMatch(body, @"\bget\b") && !Regex.IsMatch(body, @"(?:^|[^\w])(?:set|init)\b"))
+            map[m.Groups["name"].Value] = body;
+    }
+    return map;
+}
+
+static HashSet<string> NotifiedProperties(string source) =>
+    Regex.Matches(source, @"OnPropertyChanged\(\s*nameof\(\s*(?<name>\w+)\s*\)")
+        .Select(m => m.Groups["name"].Value).ToHashSet();
+
+Check("绑定：被 XAML 引用的只读派生属性必须有 PropertyChanged 通知", () =>
+{
+    var mutable = MutableProperties(allVmSource);
+    var derived = ReadOnlyGetterBodies(allVmSource);
+    var notified = NotifiedProperties(allVmSource);
+    if (mutable.Count == 0 || derived.Count == 0)
+        throw new Exception("未能从 VM 源码解析出可写/派生属性 —— 守卫失效");
+
+    // XAML 中绑定到的属性名（含 Path= 写法）
+    var bound = new HashSet<string>(StringComparer.Ordinal);
+    foreach (var f in Directory.GetFiles(viewsDir, "*.xaml", SearchOption.AllDirectories)
+                 .Concat(new[] { Path.Combine(repoRoot, "src", "ElasticDesktopManager", "MainWindow.xaml") }))
+    {
+        foreach (Match m in Regex.Matches(File.ReadAllText(f), @"\{Binding\s+(?:Path\s*=\s*)?(?<name>[A-Za-z_]\w*)"))
+            bound.Add(m.Groups["name"].Value);
+    }
+
+    var bad = new List<string>();
+    foreach (var (name, body) in derived)
+    {
+        if (!bound.Contains(name)) continue;    // 未被 XAML 使用 → 不管（避免噪音）
+        if (notified.Contains(name)) continue;  // 已正确通知
+
+        var deps = mutable
+            .Where(p => p != name && Regex.IsMatch(body, $@"(?<![\w.]){Regex.Escape(p)}\b"))
+            .OrderBy(p => p)
+            .ToList();
+        if (deps.Count > 0)
+            bad.Add($"{name}（依赖可变的 {string.Join("/", deps)}）从未 OnPropertyChanged(nameof({name})) → 界面会永久停在旧值");
+    }
+
+    if (bad.Count > 0)
+        throw new Exception($"发现 {bad.Count} 处派生属性未通知：\n    " + string.Join("\n    ", bad.Distinct()));
+});
+
+// ============================================================
+// 规则：不得对资源字典集合使用字面量下标
+//
+// 背景（真实线上缺陷）：ThemeService 曾用 dicts.RemoveAt(1) 删旧主题词典，注释假定
+// "索引 0 = Common.xaml"。后来在 Common 之前插入了 Tokens.xaml，索引整体后移一位，
+// 于是切主题时删掉的其实是 Common.xaml（整套控件模板）→ 控件回退成 WPF 默认外观，
+// 用户表现为"UI 还是之前的样子"。合并顺序会随功能演进而变，任何按固定下标的增删都是定时炸弹。
+// ============================================================
+
+static List<string> FindLiteralDictionaryIndexing(string source, string label)
+{
+    var hits = new List<string>();
+    foreach (Match m in Regex.Matches(source,
+        @"MergedDictionaries\s*\.\s*RemoveAt\s*\(\s*\d+\s*\)|MergedDictionaries\s*\[\s*\d+\s*\]"))
+        hits.Add($"{label}: {m.Value} —— 请按 Source 识别词典，不要依赖合并顺序/下标");
+    return hits;
+}
+
+Check("资源字典：不得用字面量下标增删 MergedDictionaries", () =>
+{
+    var hits = new List<string>();
+    foreach (var f in Directory.GetFiles(Path.Combine(repoRoot, "src"), "*.cs", SearchOption.AllDirectories))
+        hits.AddRange(FindLiteralDictionaryIndexing(File.ReadAllText(f), Path.GetRelativePath(repoRoot, f)));
+    if (hits.Count > 0)
+        throw new Exception($"发现 {hits.Count} 处：\n    " + string.Join("\n    ", hits.Distinct()));
+});
+
+Check("守卫自检：派生属性未通知 / 字典字面量下标 / 跨主题类型冲突 均能被抓出", () =>
+{
+    // ---- 派生属性未通知：复现 CanConnect 真实缺陷 ----
+    const string vm = """
+        public class V
+        {
+            private object? _selected;
+            public object? Selected
+            {
+                get => _selected;
+                set { if (SetProperty(ref _selected, value)) OnPropertyChanged(nameof(HasSelection)); }
+            }
+            public bool HasSelection => Selected is not null;
+            public bool CanConnect => Selected is not null;
+            public string Plain => "x";
+        }
+        """;
+    var mutable = MutableProperties(vm);
+    if (!mutable.Contains("Selected")) throw new Exception("未识别可写属性 Selected");
+    if (mutable.Contains("V")) throw new Exception("误报：类名 V 不应被当成可写属性");
+    var derived = ReadOnlyGetterBodies(vm);
+    if (!derived.ContainsKey("CanConnect") || !derived.ContainsKey("HasSelection"))
+        throw new Exception("未识别只读派生属性");
+    var notified = NotifiedProperties(vm);
+    if (!notified.Contains("HasSelection")) throw new Exception("未识别已有通知");
+    if (notified.Contains("CanConnect")) throw new Exception("误判：CanConnect 不该被认作已通知");
+    if (!Regex.IsMatch(derived["CanConnect"], @"(?<![\w.])Selected\b"))
+        throw new Exception("未识别派生属性对可写属性的依赖");
+
+    // ---- 字典字面量下标 ----
+    if (FindLiteralDictionaryIndexing("Application.Current.Resources.MergedDictionaries.RemoveAt(1);", "t").Count != 1)
+        throw new Exception("未抓出 MergedDictionaries.RemoveAt(1)");
+    if (FindLiteralDictionaryIndexing("dicts[MergedDictionaries.Count - 1]", "t").Count != 0)
+        throw new Exception("误报：按 Count 计算的下标是安全的");
+    // init-only 属性不算可变（否则 NavItem.Item / GroupKey 这类只读派生属性会误报）
+    const string initOnly = """
+        public class N
+        {
+            public required object Item { get; init; }
+            public string Name => Item.ToString()!;
+        }
+        """;
+    if (MutableProperties(initOnly).Contains("Item"))
+        throw new Exception("误报：init-only 属性被当成可变属性");
+
+    // ---- 跨主题同名令牌类型冲突 ----
+    var a = TokenTypeMapOfXml("""<ResourceDictionary xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"><sys:Double x:Key="H" xmlns:sys="clr-namespace:System;assembly=System.Runtime">32</sys:Double></ResourceDictionary>""");
+    var b = TokenTypeMapOfXml("""<ResourceDictionary xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"><Thickness x:Key="H">32</Thickness></ResourceDictionary>""");
+    if (a["H"] == b["H"]) throw new Exception("自检样本构造失败（两边类型应不同）");
 });
 
 // ---- 守卫自检：确保上面四条规则真的能失败（假绿比没有守卫更危险）----

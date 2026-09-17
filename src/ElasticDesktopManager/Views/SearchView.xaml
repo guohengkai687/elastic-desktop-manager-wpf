@@ -22,7 +22,16 @@
             <TextBlock x:Name="TitleText" Style="{StaticResource PageTitleStyle}" VerticalAlignment="Center" />
             <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center">
                 <TextBlock x:Name="IndexLabel" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" />
-                <ComboBox ItemsSource="{Binding Indices}" SelectedItem="{Binding SelectedIndex}" Margin="0,3,0,0" />
+                <!-- 可编辑：既能从下拉里选具体索引，也能直接输入通配符/别名/逗号分隔的多索引 -->
+                <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+                    <ComboBox Width="250" IsEditable="True" IsTextSearchEnabled="True"
+                              ItemsSource="{Binding Indices}"
+                              Text="{Binding SelectedIndex, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBlock Margin="8,0,0,0" VerticalAlignment="Center" FontSize="11"
+                               MaxWidth="220" TextTrimming="CharacterEllipsis"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
+                               Text="{Binding IndexHint, Mode=OneWay}" />
+                </StackPanel>
             </StackPanel>
             <StackPanel Grid.Column="2" Margin="14,0,0,0" VerticalAlignment="Center">
                 <TextBlock x:Name="TimeoutLabel" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" />

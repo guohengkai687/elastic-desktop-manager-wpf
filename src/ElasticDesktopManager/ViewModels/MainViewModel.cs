@@ -1,6 +1,8 @@
 using System.Windows.Controls;
+using System.Windows.Media;
 using ElasticDesktopManager.Core.Es;
 using ElasticDesktopManager.Core.I18n;
+using ElasticDesktopManager.Core.Ui;
 using ElasticDesktopManager.Mvvm;
 using ElasticDesktopManager.Services;
 
@@ -12,10 +14,39 @@ public class NavItem : ObservableObject
     public required string Code { get; init; }
     public required string TitleKey { get; init; }
 
-    /// <summary>导航图标（文本字形，避免引入图标包依赖）。</summary>
-    public string Glyph { get; init; } = "";
+    /// <summary>矢量图标路径（24×24 视图框，描边式）。见 <see cref="AppIcons"/>。</summary>
+    public string IconPath { get; init; } = "";
+
+    /// <summary>非空表示这是一个分组标题（不是页面，不可选中）。</summary>
+    public string? GroupKey { get; init; }
+
+    public bool IsGroup => GroupKey is not null;
+
+    /// <summary>分组项不可选、不可点。</summary>
+    public bool IsSelectable => !IsGroup;
 
     public string Title => Localization.L(TitleKey);
+
+    private Geometry? _iconGeometry;
+
+    /// <summary>解析后的图标几何（惰性、只解析一次）。</summary>
+    public Geometry IconGeometry
+    {
+        get
+        {
+            if (_iconGeometry is not null) return _iconGeometry;
+            if (string.IsNullOrEmpty(IconPath)) return _iconGeometry = Geometry.Empty;
+            try
+            {
+                return _iconGeometry = Geometry.Parse(IconPath);
+            }
+            catch (FormatException)
+            {
+                // 图标数据坏掉不该让整个应用起不来；测试会逐条校验 AppIcons 的语法
+                return _iconGeometry = Geometry.Empty;
+            }
+        }
+    }
 
     public void RefreshTitle() => OnPropertyChanged(nameof(Title));
 }
@@ -32,18 +63,26 @@ public class MainViewModel : ObservableObject
 
     public ObservableList<NavItem> NavItems { get; } = new()
     {
-        new NavItem { Code = "home", TitleKey = "nav.home", Glyph = "❤" },
-        new NavItem { Code = "nodes", TitleKey = "nav.nodes", Glyph = "⬡" },
-        new NavItem { Code = "shards", TitleKey = "nav.shards", Glyph = "▦" },
-        new NavItem { Code = "indices", TitleKey = "nav.indices", Glyph = "☰" },
-        new NavItem { Code = "metrics", TitleKey = "nav.metrics", Glyph = "▤" },
-        new NavItem { Code = "rest", TitleKey = "nav.rest", Glyph = "⚡" },
-        new NavItem { Code = "sql", TitleKey = "nav.sql", Glyph = "⌘" },
-        new NavItem { Code = "search", TitleKey = "nav.search", Glyph = "◎" },
-        new NavItem { Code = "analyze", TitleKey = "nav.analyze", Glyph = "✂" },
-        new NavItem { Code = "diag", TitleKey = "nav.diag", Glyph = "⚕" },
-        new NavItem { Code = "templates", TitleKey = "nav.templates", Glyph = "❐" },
+        new NavItem { Code = "", TitleKey = "nav.group.overview", GroupKey = "g1" },
+        new NavItem { Code = "home", TitleKey = "nav.home", IconPath = AppIcons.Home },
+
+        new NavItem { Code = "", TitleKey = "nav.group.cluster", GroupKey = "g2" },
+        new NavItem { Code = "nodes", TitleKey = "nav.nodes", IconPath = AppIcons.Nodes },
+        new NavItem { Code = "shards", TitleKey = "nav.shards", IconPath = AppIcons.Shards },
+        new NavItem { Code = "indices", TitleKey = "nav.indices", IconPath = AppIcons.Indices },
+        new NavItem { Code = "metrics", TitleKey = "nav.metrics", IconPath = AppIcons.Metrics },
+
+        new NavItem { Code = "", TitleKey = "nav.group.data", GroupKey = "g3" },
+        new NavItem { Code = "search", TitleKey = "nav.search", IconPath = AppIcons.Search },
+        new NavItem { Code = "snapshot", TitleKey = "nav.snapshot", IconPath = AppIcons.Snapshot },
+
+        new NavItem { Code = "", TitleKey = "nav.group.tools", GroupKey = "g4" },
+        new NavItem { Code = "rest", TitleKey = "nav.rest", IconPath = AppIcons.Rest },
+        new NavItem { Code = "sql", TitleKey = "nav.sql", IconPath = AppIcons.Sql },
     };
+
+    /// <summary>第一个真实页面（跳过分组标题）：窗口加载后默认选中。</summary>
+    public NavItem? FirstPage => NavItems.FirstOrDefault(x => !x.IsGroup);
 
     private NavItem? _selectedNav;
     public NavItem? SelectedNav
@@ -51,6 +90,8 @@ public class MainViewModel : ObservableObject
         get => _selectedNav;
         set
         {
+            // 分组标题不是页面：不接受选中（否则 Navigate 会拿空 code 查表抛异常）
+            if (value is { IsGroup: true }) return;
             if (SetProperty(ref _selectedNav, value) && value is not null)
                 Navigate(value.Code);
         }
@@ -125,15 +166,25 @@ public class MainViewModel : ObservableObject
         OpenAboutCommand = new RelayCommand(_ => Ui.ShowAbout());
 
         IsDarkTheme = ThemeService.Current == "dark";
+        ThemeService.ThemeChanged += OnThemeChanged;
         Ui.ConnectionChanged += OnConnectionChanged;
         Localization.LanguageChanged += OnLanguageChanged;
     }
 
+    private void OnThemeChanged() => IsDarkTheme = ThemeService.Current == "dark";
+
     private void ToggleTheme()
     {
-        var next = IsDarkTheme ? "light" : "dark";
-        ThemeService.ApplyTheme(next);
-        IsDarkTheme = next == "dark";
+        // 手动切换视为放弃“跟随系统”，否则系统偏好事件会立刻把主题改回去
+        var settings = App.Settings;
+        if (settings.AutoTheme)
+        {
+            settings.AutoTheme = false;
+            App.SettingsService.Save(settings);
+        }
+
+        ThemeService.ApplyTheme(IsDarkTheme ? "light" : "dark");
+        IsDarkTheme = ThemeService.Current == "dark";
     }
 
     private void OnLanguageChanged()
@@ -210,9 +261,7 @@ public class MainViewModel : ObservableObject
             "rest" => Create<Views.RestView, ViewModels.RestViewModel>(),
             "sql" => Create<Views.SqlView, ViewModels.SqlViewModel>(),
             "search" => Create<Views.SearchView, ViewModels.SearchViewModel>(),
-            "analyze" => Create<Views.AnalyzeView, ViewModels.AnalyzeViewModel>(),
-            "diag" => Create<Views.DiagnosticsView, ViewModels.DiagnosticsViewModel>(),
-            "templates" => Create<Views.TemplatesView, ViewModels.TemplatesViewModel>(),
+            "snapshot" => Create<Views.SnapshotView, ViewModels.SnapshotViewModel>(),
             _ => throw new KeyNotFoundException(code),
         };
         _pages[code] = view;

@@ -2,33 +2,6 @@ using System.Text.Json;
 
 namespace ElasticDesktopManager.Core.Models;
 
-/// <summary>分词结果中的一个 token（对应 _analyze 响应的 tokens 数组元素）。</summary>
-public class AnalyzeToken
-{
-    public string Token { get; set; } = "";
-    public int StartOffset { get; set; }
-    public int EndOffset { get; set; }
-    public string Type { get; set; } = "";
-    public int Position { get; set; }
-
-    /// <summary>界面直接展示的位置区间文本。</summary>
-    public string RangeText => $"{StartOffset}-{EndOffset}";
-}
-
-/// <summary>索引模板 / 组件模板的一条记录。</summary>
-public class EsTemplate
-{
-    public string Name { get; set; } = "";
-    /// <summary>可组合索引模板的 composed_of（组件模板列表），逗号拼接。</summary>
-    public string ComposedOf { get; set; } = "";
-    /// <summary>索引模式（index_patterns），逗号拼接。</summary>
-    public string IndexPatterns { get; set; } = "";
-    public string Priority { get; set; } = "";
-    public string Version { get; set; } = "";
-    /// <summary>该模板的完整 JSON（详情展示用）。</summary>
-    public string BodyJson { get; set; } = "";
-}
-
 /// <summary>索引别名。</summary>
 public class EsAlias
 {

@@ -1,4 +1,5 @@
 using System.Net;
+using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using ElasticDesktopManager.Core;
@@ -7,6 +8,7 @@ using ElasticDesktopManager.Core.I18n;
 using ElasticDesktopManager.Core.Json;
 using ElasticDesktopManager.Core.Models;
 using ElasticDesktopManager.Core.Services;
+using ElasticDesktopManager.Core.Ui;
 
 // ============================================================
 // ElasticDesktopManager.Tests — 轻量控制台断言测试（无第三方依赖）
@@ -604,7 +606,7 @@ Test("查询示例: 每条示例的 TitleKey 唯一（避免界面出现重复�
 });
 
 // ============================================================
-// 运维/诊断端点（借鉴 ES-King-wails 补齐的能力）
+// 运维端点（借鉴 ES-King-wails 补齐的能力）
 // ============================================================
 
 // 抓取一次请求的 (method, path+query, body)
@@ -676,26 +678,6 @@ Test("运维: 多索引逗号分隔逐个转义但保留逗号", () =>
     var (_, uri, _) = Capture(c => c.GetMappingAsync("a b,c d").GetAwaiter().GetResult());
     True(uri.Contains("a%20b,c%20d"), $"multi index escaped => {uri}");
 });
-
-Test("运维: 分词 POST /{index}/_analyze 带 field 与 analyzer", () =>
-{
-    var (m, uri, body) = Capture(c =>
-        c.AnalyzeTextAsync("my-index", "hello world", "title", "standard").GetAwaiter().GetResult());
-    Eq("POST", m, "method");
-    True(uri.EndsWith("/my-index/_analyze"), $"path => {uri}");
-    Contains(body!, "hello world", "text in body");
-    Contains(body!, "title", "field in body");
-    Contains(body!, "standard", "analyzer in body");
-});
-
-Test("运维: 分词 不带索引时走 /_analyze，且不写 field 字段", () =>
-{
-    var (_, uri, body) = Capture(c => c.AnalyzeTextWithBuiltinAsync("hello", "standard").GetAwaiter().GetResult());
-    True(uri.EndsWith("/_analyze"), $"path => {uri}");
-    False(body!.Contains("\"field\""), "no field key when absent");
-    False(body.Contains("\"analyzer\":null"), "no null analyzer");
-});
-
 Test("运维: 字段 Top 值聚合自动加 .keyword 且含 cardinality", () =>
 {
     var (m, uri, body) = Capture(c =>
@@ -800,50 +782,6 @@ Test("运维: Force Merge 带 max_num_segments", () =>
     True(uri.Contains("max_num_segments=1"), $"query param => {uri}");
     NoDoubleSlash(uri, "forcemerge");
 });
-
-Test("运维: 模板 查询/删除/创建", () =>
-{
-    var (m1, uri1, _) = Capture(c => c.GetIndexTemplatesAsync().GetAwaiter().GetResult());
-    Eq("GET", m1, "list method");
-    True(uri1.EndsWith("/_index_template"), $"list path => {uri1}");
-
-    var (_, uri2, _) = Capture(c => c.GetComponentTemplatesAsync().GetAwaiter().GetResult());
-    True(uri2.EndsWith("/_component_template"), $"component path => {uri2}");
-
-    var (m3, uri3, _) = Capture(c => c.DeleteIndexTemplateAsync("tpl-1").GetAwaiter().GetResult());
-    Eq("DELETE", m3, "delete method");
-    True(uri3.EndsWith("/_index_template/tpl-1"), $"delete path => {uri3}");
-
-    var (m4, uri4, body) = Capture(c =>
-        c.PutIndexTemplateAsync("tpl-1", "{\"index_patterns\":[\"a-*\"]}").GetAwaiter().GetResult());
-    Eq("PUT", m4, "put method");
-    True(uri4.EndsWith("/_index_template/tpl-1"), $"put path => {uri4}");
-    Contains(body!, "index_patterns", "template body");
-});
-
-Test("运维: 诊断 分片分配解释 / 热点线程 / 线程池 / 挂起任务", () =>
-{
-    var (m1, uri1, _) = Capture(c => c.ExplainAllocationAsync("my-index", 0, true).GetAwaiter().GetResult());
-    Eq("POST", m1, "explain method");
-    True(uri1.EndsWith("/_cluster/allocation/explain"), $"explain path => {uri1}");
-
-    var (m2, uri2, _) = Capture(c => c.HotThreadsAsync().GetAwaiter().GetResult());
-    Eq("GET", m2, "hot threads method");
-    True(uri2.EndsWith("/_nodes/hot_threads"), $"hot threads path => {uri2}");
-
-    var (m3, uri3, _) = Capture(c => c.HotThreadsAsync("node-1").GetAwaiter().GetResult());
-    Eq("GET", m3, "hot threads by node");
-    True(uri3.EndsWith("/_nodes/node-1/hot_threads"), $"hot threads node path => {uri3}");
-
-    var (_, uri4, _) = Capture(c => c.GetThreadPoolAsync().GetAwaiter().GetResult());
-    True(uri4.EndsWith("/_nodes/thread_pool"), $"thread pool path => {uri4}");
-
-    var (_, uri5, _) = Capture(c => c.GetPendingTasksAsync().GetAwaiter().GetResult());
-    True(uri5.EndsWith("/_cluster/pending_tasks"), $"pending tasks path => {uri5}");
-
-    foreach (var u in new[] { uri1, uri2, uri3, uri4, uri5 }) NoDoubleSlash(u, "diag");
-});
-
 Test("运维: 全部新增端点路径无漏斜杠/双斜杠（AC3 回归）", () =>
 {
     var uris = new List<string>();
@@ -852,21 +790,14 @@ Test("运维: 全部新增端点路径无漏斜杠/双斜杠（AC3 回归）", (
     Cap(c => c.GetNodeStatsAsync().GetAwaiter().GetResult());
     Cap(c => c.GetMappingAsync("i").GetAwaiter().GetResult());
     Cap(c => c.GetSettingsAsync("i").GetAwaiter().GetResult());
-    Cap(c => c.AnalyzeTextAsync("i", "t").GetAwaiter().GetResult());
     Cap(c => c.FieldTopValuesAsync("i", "f").GetAwaiter().GetResult());
     Cap(c => c.GetAliasesAsync().GetAwaiter().GetResult());
     Cap(c => c.GetIndexAliasesAsync("i").GetAwaiter().GetResult());
     Cap(c => c.ReindexAsync("a", "b").GetAwaiter().GetResult());
-    Cap(c => c.GetIndexTemplatesAsync().GetAwaiter().GetResult());
-    Cap(c => c.GetComponentTemplatesAsync().GetAwaiter().GetResult());
-    Cap(c => c.ExplainAllocationAsync().GetAwaiter().GetResult());
-    Cap(c => c.HotThreadsAsync().GetAwaiter().GetResult());
-    Cap(c => c.GetThreadPoolAsync().GetAwaiter().GetResult());
-    Cap(c => c.GetPendingTasksAsync().GetAwaiter().GetResult());
     Cap(c => c.ForceMergeAsync("i").GetAwaiter().GetResult());
 
     foreach (var u in uris) NoDoubleSlash(u, "all new endpoints");
-    Eq(15, uris.Count, "endpoint count");
+    Eq(8, uris.Count, "endpoint count");
 });
 
 // ============================================================
@@ -973,81 +904,8 @@ Test("指标: 空对象与空数组不被丢弃，显示为空容器标记", () 
 });
 
 // ============================================================
-// 新增解析器：分词 / 模板 / 字段 Top 值
+// 新增解析器：字段 Top 值 / 别名
 // ============================================================
-
-Test("解析: 分词 tokens（含偏移与位置）", () =>
-{
-    const string json = """
-    {"tokens":[
-      {"token":"hello","start_offset":0,"end_offset":5,"type":"<ALPHANUM>","position":0},
-      {"token":"world","start_offset":6,"end_offset":11,"type":"<ALPHANUM>","position":1}
-    ]}
-    """;
-    var tokens = EsParsers.ParseAnalyzeTokens(json);
-    Eq(2, tokens.Count, "token count");
-    Eq("hello", tokens[0].Token, "first token");
-    Eq(0, tokens[0].StartOffset, "start offset");
-    Eq(5, tokens[0].EndOffset, "end offset");
-    Eq("<ALPHANUM>", tokens[0].Type, "type");
-    Eq(1, tokens[1].Position, "second position");
-    Eq("6-11", tokens[1].RangeText, "range text");
-});
-
-Test("解析: 分词 中文分词器结果（多 token、带 offset）", () =>
-{
-    const string json = """
-    {"tokens":[
-      {"token":"中华","start_offset":0,"end_offset":2,"type":"CN_WORD","position":0},
-      {"token":"人民","start_offset":2,"end_offset":4,"type":"CN_WORD","position":1}
-    ]}
-    """;
-    var tokens = EsParsers.ParseAnalyzeTokens(json);
-    Eq(2, tokens.Count, "cn tokens");
-    Eq("中华", tokens[0].Token, "cn token text");
-    Eq("CN_WORD", tokens[0].Type, "cn token type");
-});
-
-Test("解析: 分词 无 tokens 字段时返回空列表而不抛异常", () =>
-{
-    Eq(0, EsParsers.ParseAnalyzeTokens("{}").Count, "no tokens key");
-    Eq(0, EsParsers.ParseAnalyzeTokens("""{"tokens":[]}""").Count, "empty tokens");
-});
-
-Test("解析: 索引模板（index_patterns / priority / version，并按名称排序）", () =>
-{
-    const string json = """
-    {
-      "zeta": {"index_patterns":["z-*"],"priority":5,"version":2},
-      "alpha": {"index_patterns":["a-*","b-*"],"priority":10}
-    }
-    """;
-    var tpl = EsParsers.ParseTemplates(json);
-    Eq(2, tpl.Count, "template count");
-    Eq("alpha", tpl[0].Name, "sorted by name");
-    Eq("a-*, b-*", tpl[0].IndexPatterns, "patterns joined");
-    Eq("10", tpl[0].Priority, "priority");
-    Eq("", tpl[0].Version, "missing version -> empty");
-    Eq("2", tpl[1].Version, "version parsed");
-    True(tpl[0].BodyJson.Contains("index_patterns"), "body json kept");
-});
-
-Test("解析: 组件模板 composed_of 解析", () =>
-{
-    const string json = """
-    {"comp1":{"template":{"settings":{"number_of_shards":1}},"version":1}}
-    """;
-    var tpl = EsParsers.ParseTemplates(json);
-    Eq(1, tpl.Count, "count");
-    Eq("comp1", tpl[0].Name, "name");
-    Contains(tpl[0].BodyJson, "number_of_shards", "body");
-});
-
-Test("解析: 模板 空对象返回空列表", () =>
-{
-    Eq(0, EsParsers.ParseTemplates("{}").Count, "empty object");
-});
-
 Test("解析: 字段 Top 值（terms buckets + cardinality）", () =>
 {
     const string json = """
@@ -1094,23 +952,6 @@ Test("解析: 字段 Top 值 无 aggregations 时返回空结果", () =>
     Eq(0, r.Values.Count, "no values");
     Eq(0, r.DistinctCount, "no cardinality");
 });
-
-Test("运维: 组件模板删除端点路径正确", () =>
-{
-    var (m, uri, _) = Capture(c => c.DeleteComponentTemplateAsync("comp-1").GetAwaiter().GetResult());
-    Eq("DELETE", m, "method");
-    True(uri.EndsWith("/_component_template/comp-1"), $"path => {uri}");
-    NoDoubleSlash(uri, "component template delete");
-});
-
-Test("运维: 分词 指定 field 时才写 field 字段", () =>
-{
-    var (_, _, body) = Capture(c =>
-        c.AnalyzeTextAsync("i", "hello", "title").GetAwaiter().GetResult());
-    Contains(body!, "\"field\":\"title\"", "field written");
-    False(body!.Contains("\"analyzer\""), "no analyzer key when not given");
-});
-
 Test("运维: 字段 Top 值 keyword=false 时不加 .keyword 后缀", () =>
 {
     var (_, _, body) = Capture(c =>
@@ -1226,6 +1067,310 @@ static string MakeTempDir()
 
 static Task<HttpResponseMessage> Ok(string json)
     => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json) });
+
+// ============================================================
+// 快照管理（A10）
+// ============================================================
+
+Test("快照: 仓库 列表/创建/校验/删除 端点契约", () =>
+{
+    var (m1, uri1, _) = Capture(c => c.GetSnapshotRepositoriesAsync().GetAwaiter().GetResult());
+    Eq("GET", m1, "list method");
+    True(uri1.EndsWith("/_snapshot"), $"list path => {uri1}");
+
+    var (m2, uri2, body2) = Capture(c => c.CreateSnapshotRepositoryAsync(
+        "backup", """{"type":"fs","settings":{"location":"/mnt/b"}}""").GetAwaiter().GetResult());
+    Eq("PUT", m2, "create method");
+    True(uri2.EndsWith("/_snapshot/backup"), $"create path => {uri2}");
+    Contains(body2!, "\"type\":\"fs\"", "body 原样透传（仓库类型由用户决定，不写死 fs）");
+
+    var (m3, uri3, _) = Capture(c => c.VerifySnapshotRepositoryAsync("backup").GetAwaiter().GetResult());
+    Eq("POST", m3, "verify method");
+    True(uri3.EndsWith("/_snapshot/backup/_verify"), $"verify path => {uri3}");
+
+    var (m4, uri4, _) = Capture(c => c.DeleteSnapshotRepositoryAsync("backup").GetAwaiter().GetResult());
+    Eq("DELETE", m4, "delete method");
+    True(uri4.EndsWith("/_snapshot/backup"), $"delete path => {uri4}");
+
+    foreach (var u in new[] { uri1, uri2, uri3, uri4 }) NoDoubleSlash(u, "snapshot repo");
+});
+
+Test("快照: 列表/创建/删除/恢复 端点契约（创建与恢复不阻塞）", () =>
+{
+    var (m1, uri1, _) = Capture(c => c.GetSnapshotsAsync("backup").GetAwaiter().GetResult());
+    Eq("GET", m1, "list method");
+    True(uri1.EndsWith("/_snapshot/backup/_all"), $"list path => {uri1}");
+
+    var (m2, uri2, body2) = Capture(c => c.CreateSnapshotAsync("backup", "snap-1").GetAwaiter().GetResult());
+    Eq("PUT", m2, "create method");
+    True(uri2.Contains("/_snapshot/backup/snap-1"), $"create path => {uri2}");
+    Contains(uri2, "wait_for_completion=false", "大集群下不能用同步等待挂住请求");
+    Contains(body2!, "\"indices\":\"*\"", "未指定索引时视为全部");
+    Contains(body2!, "\"include_global_state\":false", "默认不包含全局状态");
+
+    var (m3, uri3, body3) = Capture(c => c.CreateSnapshotAsync("backup", "snap-1", "a,b", true).GetAwaiter().GetResult());
+    Eq("PUT", m3, "create method");
+    Contains(body3!, "\"indices\":\"a,b\"", "多索引原样传给 ES");
+    Contains(body3!, "\"include_global_state\":true", "勾选后包含全局状态");
+
+    var (m4, uri4, _) = Capture(c => c.DeleteSnapshotAsync("backup", "snap-1").GetAwaiter().GetResult());
+    Eq("DELETE", m4, "delete method");
+    True(uri4.EndsWith("/_snapshot/backup/snap-1"), $"delete path => {uri4}");
+
+    var (m5, uri5, _) = Capture(c => c.RestoreSnapshotAsync("backup", "snap-1", "a").GetAwaiter().GetResult());
+    Eq("POST", m5, "restore method");
+    True(uri5.Contains("/_snapshot/backup/snap-1/_restore"), $"restore path => {uri5}");
+    Contains(uri5, "wait_for_completion=false", "恢复同样不阻塞");
+
+    var (m6, uri6, _) = Capture(c => c.GetSnapshotStatusAsync().GetAwaiter().GetResult());
+    Eq("GET", m6, "status method");
+    True(uri6.EndsWith("/_snapshot/_status"), $"status path => {uri6}");
+
+    foreach (var u in new[] { uri1, uri2, uri3, uri4, uri5, uri6 }) NoDoubleSlash(u, "snapshot");
+});
+
+Test("快照: 仓库名/快照名做 URL 转义（路径注入回归）", () =>
+{
+    var (_, uri1, _) = Capture(c => c.CreateSnapshotAsync("a/b", "s p").GetAwaiter().GetResult());
+    False(uri1.Contains("/a/b/"), $"仓库名中的斜杠必须转义 => {uri1}");
+    Contains(uri1, "a%2Fb", "仓库名已转义");
+    Contains(uri1, "s%20p", "快照名已转义");
+
+    var (_, uri2, _) = Capture(c => c.DeleteSnapshotRepositoryAsync("a/b").GetAwaiter().GetResult());
+    Contains(uri2, "a%2Fb", "删除仓库同样转义");
+});
+
+Test("解析: 快照仓库（type + settings.location）", () =>
+{
+    const string json = """
+        {
+          "repo-b": { "type": "s3", "settings": { "bucket": "my-bucket" } },
+          "repo-a": { "type": "fs", "settings": { "location": "/mnt/backups", "compress": true } }
+        }
+        """;
+    var repos = EsParsers.ParseSnapshotRepositories(json);
+    Eq(2, repos.Count, "repo count");
+    Eq("repo-a", repos[0].Name, "按名称排序");
+    Eq("fs", repos[0].Type, "type");
+    Eq("/mnt/backups", repos[0].Location, "location");
+    Contains(repos[0].SettingsJson, "compress", "settings 完整保留（详情展示用）");
+    Eq("", repos[1].Location, "s3 仓库没有 location");
+    Eq("s3", repos[1].Summary, "没有 location 时摘要回退为类型");
+    Eq(0, EsParsers.ParseSnapshotRepositories("{}").Count, "空对象");
+});
+
+Test("解析: 快照列表（state/索引/耗时/分片/失败原因，按开始时间倒序）", () =>
+{
+    const string json = """
+        {
+          "snapshots": [
+            { "snapshot": "old", "state": "FAILED", "indices": ["c"],
+              "start_time_in_millis": 1600000000000, "duration_in_millis": 500,
+              "failures": [ { "index": "c", "reason": "disk full" } ] },
+            { "snapshot": "new", "state": "SUCCESS", "indices": ["a", "b"],
+              "start_time_in_millis": 1700000000000, "duration_in_millis": 1500,
+              "version": "7.15.2", "shards": { "total": 2, "successful": 2, "failed": 0 } }
+          ]
+        }
+        """;
+    var list = EsParsers.ParseSnapshots(json);
+    Eq(2, list.Count, "snapshot count");
+    Eq("new", list[0].Name, "按开始时间倒序（新的在前）");
+
+    var newest = list[0];
+    Eq("SUCCESS", newest.State, "state");
+    Eq(2, newest.IndexCount, "index count");
+    Eq("a, b", newest.Indices, "indices 逗号拼接");
+    Eq("1.5 s", newest.Duration, "耗时人性化");
+    Eq("2/2", newest.ShardsText, "分片摘要");
+    Eq("7.15.2", newest.Version, "版本");
+    True(newest.IsSuccess, "IsSuccess");
+    True(!string.IsNullOrEmpty(newest.StartedAt), "开始时间已格式化");
+    Eq("", newest.Failures, "成功快照没有失败原因");
+
+    var oldest = list[1];
+    True(!oldest.IsSuccess, "FAILED 不是成功");
+    Contains(oldest.Failures, "disk full", "失败原因保留");
+    Contains(oldest.Failures, "c", "失败原因带索引名");
+    Eq(0, EsParsers.ParseSnapshots("{}").Count, "缺 snapshots 字段返回空");
+    Eq(0, EsParsers.ParseSnapshots("""{"snapshots":[]}""").Count, "空数组");
+});
+
+Test("解析: 快照 start_time 为 0 / 非法值时不抛异常", () =>
+{
+    const string json = """
+        { "snapshots": [ { "snapshot": "s", "state": "IN_PROGRESS",
+                           "start_time_in_millis": 0, "duration_in_millis": 0 } ] }
+        """;
+    var list = EsParsers.ParseSnapshots(json);
+    Eq(1, list.Count, "仍解析出条目");
+    Eq("", list[0].StartedAt, "0 时间戳 → 空字符串而不是 1970 年");
+    Eq("", list[0].Duration, "0 耗时 → 空字符串");
+    True(list[0].IsPending, "IN_PROGRESS 判定为进行中");
+    Eq(0, list[0].IndexCount, "缺 indices 字段 → 0");
+});
+
+// ============================================================
+// 图标：矢量路径语法与视图框校验（Linux 可跑）
+//
+// 为什么放在这里：图标数据在 Core（纯字符串），WPF 侧用 Geometry.Parse 渲染。
+// 路径数据写坏时 Geometry.Parse 会在**真机运行期**抛 FormatException，而本机跑不了 WPF。
+// 于是用这个独立的迷你解析器逐条校验语法 / 命令元数 / 坐标范围，
+// 把"运行期才炸"变成"构建期就红"。
+// ============================================================
+
+// 路径迷你语言 → (命令, 参数) 序列。只接受绝对命令，与 AppIcons 的约定一致。
+List<(char Cmd, double[] Args)> ParseIconPath(string data)
+{
+    var arity = new Dictionary<char, int>
+        { ['M'] = 2, ['L'] = 2, ['H'] = 1, ['V'] = 1, ['C'] = 6, ['A'] = 7, ['Z'] = 0 };
+    var result = new List<(char, double[])>();
+    int i = 0;
+    while (i < data.Length)
+    {
+        char c = data[i];
+        if (char.IsWhiteSpace(c) || c == ',') { i++; continue; }
+        if (!char.IsLetter(c))
+            throw new Exception($"意外的字符 '{c}'：命令必须以字母开头（不允许省略命令的隐式重复）");
+        if (!arity.TryGetValue(c, out int need))
+            throw new Exception($"不支持的路径命令 '{c}'（只允许 M/L/H/V/C/A/Z）");
+        if (char.IsLower(c))
+            throw new Exception($"不允许相对命令 '{c}'（相对命令在图标里易产生歧义）");
+        i++;
+        if (c == 'Z') { result.Add((c, Array.Empty<double>())); continue; }
+
+        var args = new List<double>();
+        while (args.Count < need)
+        {
+            while (i < data.Length && (char.IsWhiteSpace(data[i]) || data[i] == ',')) i++;
+            int start = i;
+            while (i < data.Length && (char.IsDigit(data[i]) || data[i] is '.' or '-' or '+' or 'e' or 'E')) i++;
+            if (i == start)
+                throw new Exception($"命令 '{c}' 参数不足：需要 {need} 个，实际只有 {args.Count} 个");
+            if (!double.TryParse(data[start..i], System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out double v))
+                throw new Exception($"命令 '{c}' 的参数不是合法数字：'{data[start..i]}'");
+            args.Add(v);
+        }
+        result.Add((c, args.ToArray()));
+    }
+    return result;
+}
+
+void InIconRange(double v, string context)
+{
+    if (v < -0.01 || v > 24.01)
+        throw new Exception($"{context}: 坐标 {v} 超出 0..24 视图框（会导致图标大小不一致或溢出）");
+}
+
+// 逐个子路径校验"纯弧线闭合形状"的弧数必须成对。
+// 这是"想画整圆但只写了一段弧"的典型错误：一个 A + Z 只会画出一条弦（D 形），不是圆。
+// 开放子路径（如 Refresh 的 3/4 圆箭头）允许奇数段弧 —— 一刀切会让规则变成误报源。
+void ValidateArcSubpaths(string name, List<(char Cmd, double[] Args)> cmds)
+{
+    int arcs = 0;
+    bool closed = false, hasLine = false, inSub = false;
+
+    void Flush()
+    {
+        if (inSub && closed && !hasLine && arcs > 0 && arcs % 2 != 0)
+            throw new Exception($"{name}: 纯弧线闭合子路径的弧数为奇数（{arcs}）——整圆必须用两段半圆弧");
+        arcs = 0;
+        closed = false;
+        hasLine = false;
+    }
+
+    foreach (var (c, _) in cmds)
+    {
+        switch (c)
+        {
+            case 'M': Flush(); inSub = true; break;
+            case 'A': arcs++; break;
+            case 'L':
+            case 'H':
+            case 'V':
+            case 'C': hasLine = true; break;
+            case 'Z': closed = true; break;
+        }
+    }
+    Flush();
+}
+
+Test("图标: 每条路径语法合法、命令元数正确、坐标落在 0..24 视图框", () =>
+{
+    True(AppIcons.All.Count >= 20, $"图标数量过少（{AppIcons.All.Count}），疑似漏登记");
+    var names = new HashSet<string>();
+    foreach (var (name, data) in AppIcons.All)
+    {
+        True(names.Add(name), $"{name}: 名称重复");
+        var cmds = ParseIconPath(data);
+        True(cmds.Count > 0, $"{name}: 没有任何命令");
+        Eq('M', cmds[0].Cmd, $"{name}: 路径必须以 M 开头");
+
+        foreach (var (c, a) in cmds)
+        {
+            switch (c)
+            {
+                case 'M':
+                case 'L':
+                    InIconRange(a[0], $"{name}.{c}.x");
+                    InIconRange(a[1], $"{name}.{c}.y");
+                    break;
+                case 'H':
+                    InIconRange(a[0], $"{name}.H");
+                    break;
+                case 'V':
+                    InIconRange(a[0], $"{name}.V");
+                    break;
+                case 'C':
+                    for (int k = 0; k < 6; k++) InIconRange(a[k], $"{name}.C[{k}]");
+                    break;
+                case 'A':
+                    True(a[0] > 0 && a[1] > 0, $"{name}: 圆弧半径必须为正");
+                    True(a[3] is 0 or 1, $"{name}: large-arc-flag 只能是 0 或 1");
+                    True(a[4] is 0 or 1, $"{name}: sweep-flag 只能是 0 或 1");
+                    InIconRange(a[5], $"{name}.A.x");
+                    InIconRange(a[6], $"{name}.A.y");
+                    break;
+            }
+        }
+        // 整圆写法必须是"两段半圆弧"，否则会渲染成缺口圆 / D 形
+        ValidateArcSubpaths(name, cmds);
+    }
+});
+
+Test("图标: 弧线子路径校验本身有效（能抓出单弧假圆，且不误报开放弧）", () =>
+{
+    // 必须失败：一个 A + Z = 一条弦，不是圆
+    try
+    {
+        ValidateArcSubpaths("bad", ParseIconPath("M4 12 A8 8 0 1 0 20 12 Z"));
+        throw new Exception("未能抓出单弧闭合假圆（规则已失效）");
+    }
+    catch (Exception ex) when (ex.Message.Contains("弧数为奇数"))
+    {
+        // 期望路径
+    }
+
+    // 必须通过：两段半圆弧 = 整圆
+    ValidateArcSubpaths("ok", ParseIconPath("M4 12 A8 8 0 1 0 20 12 A8 8 0 1 0 4 12 Z"));
+    // 必须通过：开放弧（3/4 圆箭头，Refresh 就是这种）
+    ValidateArcSubpaths("open", ParseIconPath("M19.6 12 A7.6 7.6 0 1 1 16.7 6.1 M16.7 6.1 H20.2"));
+    // 必须通过：直线 + 单弧闭合（合法的 D 形）
+    ValidateArcSubpaths("dshape", ParseIconPath("M4 4 V20 A8 8 0 0 1 4 4 Z"));
+});
+
+Test("图标: 每个 public const 图标都已登记进 All（防止新增图标漏登记）", () =>
+{
+    var consts = typeof(AppIcons)
+        .GetFields(BindingFlags.Public | BindingFlags.Static)
+        .Where(f => f.IsLiteral && f.FieldType == typeof(string))
+        .Select(f => f.Name)
+        .ToHashSet();
+    var registered = AppIcons.All.Select(x => x.Name).ToHashSet();
+    var missing = consts.Except(registered).OrderBy(x => x).ToList();
+    Eq(0, missing.Count, $"未登记进 AppIcons.All 的图标：{string.Join(", ", missing)}");
+});
 
 Console.WriteLine();
 Console.WriteLine($"===== 结果：通过 {passed}，失败 {failed} =====");

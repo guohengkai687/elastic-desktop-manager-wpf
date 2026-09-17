@@ -1,60 +1,87 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=System.Runtime">
 
     <!--
-      ============ 浅色主题色板 ============
+      ============ 浅色主题：现代精致 ============
+      性格：通透、留白充足、大圆角、柔和阴影、低对比描边。
       key 集合与 Dark.xaml 完全一致（binding-guard 规则强制校验）。
-      对比度：正文 #1B1F26 on #FFFFFF ≈ 15.8:1；次要 #5A6270 ≈ 6.4:1；DimText 仅用于提示。
+
+      两类 key：
+        1) 颜色（SolidColorBrush）—— DynamicResource
+        2) 主题风格令牌（圆角/密度/阴影）—— 同样 DynamicResource。
+           它们**故意放在主题词典而非 Tokens.xaml**：深浅两套要走不同性格
+           （浅色=精致疏松，深色=工具紧凑），放在 Tokens 里就只能静态取值、
+           切主题时不会变（StaticResource 只解析一次）。
+
+      对比度：正文 #14181F on #FFFFFF ≈ 17.9:1；次要 #5B6472 ≈ 6.0:1（均超 WCAG AA）。
     -->
 
+    <!-- ============ 颜色 ============ -->
+
     <!-- 底层 -->
-    <SolidColorBrush x:Key="WindowBackgroundBrush" Color="#F4F5F7" />
+    <SolidColorBrush x:Key="WindowBackgroundBrush" Color="#F5F6F8" />
     <SolidColorBrush x:Key="SurfaceBrush" Color="#FFFFFF" />
-    <SolidColorBrush x:Key="SurfaceAltBrush" Color="#F7F8FA" />
+    <SolidColorBrush x:Key="SurfaceAltBrush" Color="#F8F9FB" />
     <SolidColorBrush x:Key="SurfaceRaisedBrush" Color="#FFFFFF" />
 
     <!-- 描边与分隔 -->
-    <SolidColorBrush x:Key="BorderBrush" Color="#E2E5EA" />
-    <SolidColorBrush x:Key="BorderStrongBrush" Color="#CDD3DC" />
-    <SolidColorBrush x:Key="SeparatorBrush" Color="#E8EBEF" />
-    <SolidColorBrush x:Key="FocusRingBrush" Color="#1F6FEB" />
+    <SolidColorBrush x:Key="BorderBrush" Color="#E4E7EC" />
+    <SolidColorBrush x:Key="BorderStrongBrush" Color="#CFD5DE" />
+    <SolidColorBrush x:Key="SeparatorBrush" Color="#EDEFF3" />
+    <SolidColorBrush x:Key="FocusRingBrush" Color="#2563EB" />
 
     <!-- 交互态 -->
-    <SolidColorBrush x:Key="HoverBrush" Color="#EEF1F5" />
-    <SolidColorBrush x:Key="HoverStrongBrush" Color="#E3E8EF" />
-    <SolidColorBrush x:Key="PressedBrush" Color="#D8DEE7" />
+    <SolidColorBrush x:Key="HoverBrush" Color="#F0F3F7" />
+    <SolidColorBrush x:Key="HoverStrongBrush" Color="#E5EAF1" />
+    <SolidColorBrush x:Key="PressedBrush" Color="#D9E0E9" />
 
     <!-- 文本 -->
-    <SolidColorBrush x:Key="TextPrimaryBrush" Color="#1B1F26" />
-    <SolidColorBrush x:Key="TextSecondaryBrush" Color="#5A6270" />
-    <SolidColorBrush x:Key="DimTextBrush" Color="#878E9A" />
+    <SolidColorBrush x:Key="TextPrimaryBrush" Color="#14181F" />
+    <SolidColorBrush x:Key="TextSecondaryBrush" Color="#5B6472" />
+    <SolidColorBrush x:Key="DimTextBrush" Color="#8A93A0" />
 
     <!-- 强调 -->
-    <SolidColorBrush x:Key="AccentBrush" Color="#1F6FEB" />
-    <SolidColorBrush x:Key="AccentHoverBrush" Color="#1A5FD0" />
-    <SolidColorBrush x:Key="AccentFaintBrush" Color="#E8F1FE" />
-    <SolidColorBrush x:Key="AccentSubtleBrush" Color="#EDF4FE" />
-    <SolidColorBrush x:Key="AccentTextBrush" Color="#1F6FEB" />
+    <SolidColorBrush x:Key="AccentBrush" Color="#2563EB" />
+    <SolidColorBrush x:Key="AccentHoverBrush" Color="#1D4FD8" />
+    <SolidColorBrush x:Key="AccentFaintBrush" Color="#EAF1FE" />
+    <SolidColorBrush x:Key="AccentSubtleBrush" Color="#F1F6FE" />
+    <SolidColorBrush x:Key="AccentTextBrush" Color="#1D4FD8" />
 
     <!-- 语义色 -->
     <SolidColorBrush x:Key="DangerBrush" Color="#D93B34" />
-    <SolidColorBrush x:Key="GreenBrush" Color="#1F9D45" />
-    <SolidColorBrush x:Key="YellowBrush" Color="#B8860B" />
-    <SolidColorBrush x:Key="RedBrush" Color="#D93B34" />
-    <SolidColorBrush x:Key="GrayBrush" Color="#99A1AC" />
+    <SolidColorBrush x:Key="GreenBrush" Color="#16A34A" />
+    <SolidColorBrush x:Key="YellowBrush" Color="#B45309" />
+    <SolidColorBrush x:Key="RedBrush" Color="#DC2626" />
+    <SolidColorBrush x:Key="GrayBrush" Color="#9AA3AE" />
 
     <!-- 导航 -->
-    <SolidColorBrush x:Key="NavSelectedBrush" Color="#E8F1FE" />
-    <SolidColorBrush x:Key="NavIndicatorBrush" Color="#1F6FEB" />
+    <SolidColorBrush x:Key="NavSelectedBrush" Color="#EAF1FE" />
+    <SolidColorBrush x:Key="NavIndicatorBrush" Color="#2563EB" />
 
     <!-- 浮层：浅色下用深色浮层 + 白字，保证对比 -->
-    <SolidColorBrush x:Key="OverlayBrush" Color="#E61F2430" />
+    <SolidColorBrush x:Key="OverlayBrush" Color="#E6181C24" />
     <SolidColorBrush x:Key="OverlayTextBrush" Color="#FFFFFF" />
 
     <!-- 滚动条 -->
-    <SolidColorBrush x:Key="ScrollThumbBrush" Color="#C4CAD4" />
-    <SolidColorBrush x:Key="ScrollThumbHoverBrush" Color="#A9B1BE" />
+    <SolidColorBrush x:Key="ScrollThumbBrush" Color="#C7CDD7" />
+    <SolidColorBrush x:Key="ScrollThumbHoverBrush" Color="#AEB6C2" />
 
     <!-- 表格 -->
-    <SolidColorBrush x:Key="SelectedRowBrush" Color="#DCE9FC" />
+    <SolidColorBrush x:Key="SelectedRowBrush" Color="#E3EDFD" />
+
+    <!-- ============ 主题风格令牌（浅色 = 现代精致）============ -->
+
+    <CornerRadius x:Key="ControlRadius">8</CornerRadius>
+    <CornerRadius x:Key="CardRadius">12</CornerRadius>
+    <Thickness x:Key="CardPadding">18</Thickness>
+    <sys:Double x:Key="ControlHeight">32</sys:Double>
+
+    <!-- 阴影：柔和、有层次（卡片 < 浮层 < 对话框） -->
+    <DropShadowEffect x:Key="ShadowSm" BlurRadius="8" ShadowDepth="1" Direction="270"
+                      Color="#0F172A" Opacity="0.10" />
+    <DropShadowEffect x:Key="ShadowMd" BlurRadius="18" ShadowDepth="3" Direction="270"
+                      Color="#0F172A" Opacity="0.14" />
+    <DropShadowEffect x:Key="ShadowLg" BlurRadius="30" ShadowDepth="6" Direction="270"
+                      Color="#0F172A" Opacity="0.20" />
 </ResourceDictionary>

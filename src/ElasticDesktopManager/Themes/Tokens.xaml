@@ -5,7 +5,11 @@
     <!--
       ============ 设计令牌：几何（与主题无关，StaticResource）============
       颜色令牌在 Dark.xaml / Light.xaml（DynamicResource，运行时切换）。
-      这里只放不随主题变化的尺寸/圆角/字号/阴影，避免每次切主题重算布局。
+      这里只放**不随主题变化**的尺寸/圆角/字号，避免每次切主题重算布局。
+
+      哪些不放这里：控件高度、卡片内边距、控件圆角、阴影 —— 它们属于"主题性格"
+      （浅色=精致疏松、深色=工具紧凑），定义在 Light/Dark 里并用 DynamicResource 引用。
+      放在这里的话只能用 StaticResource（解析一次），切主题不会生效。
 
       ⚠️ 关键约定（踩过线上崩溃，勿改）：
       令牌的声明类型必须与使用它的目标属性类型**精确一致**。
@@ -41,8 +45,7 @@
     <sys:Double x:Key="FontXl">19</sys:Double>
     <sys:Double x:Key="FontXxl">26</sys:Double>
 
-    <!-- 控件高度（目标是 Control.MinHeight / FrameworkElement.Height，类型为 double） -->
-    <sys:Double x:Key="ControlHeight">30</sys:Double>
+    <!-- 控件高度：ControlHeight（主题相关，见 Light/Dark）已移出；ControlHeightSm 为固定工具值 -->
     <sys:Double x:Key="ControlHeightSm">26</sys:Double>
 
     <!--
@@ -50,20 +53,18 @@
       RowDefinition.Height / ColumnDefinition.Width 是 GridLength（不是 double！），
       这是本项目运行期崩溃的根因，切勿改回 sys:Double。
     -->
-    <GridLength x:Key="TitleBarHeight">52</GridLength>
-    <GridLength x:Key="StatusBarHeight">28</GridLength>
-    <GridLength x:Key="NavWidth">208</GridLength>
+    <GridLength x:Key="TitleBarHeight">56</GridLength>
+    <GridLength x:Key="StatusBarHeight">30</GridLength>
+    <GridLength x:Key="NavWidth">216</GridLength>
 
     <!-- 等宽字体（JSON / DSL / 日志统一用） -->
     <FontFamily x:Key="MonoFont">Cascadia Mono, Consolas, Courier New, monospace</FontFamily>
 
-    <!-- 阴影（层级：卡片 < 浮层 < 对话框）。Freezable 资源，多处共用安全。 -->
-    <DropShadowEffect x:Key="ShadowSm" BlurRadius="6" ShadowDepth="1" Direction="270"
-                      Color="#000000" Opacity="0.18" />
-    <DropShadowEffect x:Key="ShadowMd" BlurRadius="16" ShadowDepth="3" Direction="270"
-                      Color="#000000" Opacity="0.24" />
-    <DropShadowEffect x:Key="ShadowLg" BlurRadius="28" ShadowDepth="6" Direction="270"
-                      Color="#000000" Opacity="0.32" />
+    <!--
+      阴影（ShadowSm/Md/Lg，层级：卡片 < 浮层 < 对话框）已移到 Light/Dark：
+      浅色要"柔和有层次"，深色要"几乎无投影"，性格不同、必须随主题切换。
+      使用处一律 {DynamicResource Shadow*}：StaticResource 在主题词典合并前就解析，取不到值。
+    -->
 
     <!--
       过渡动效时长：**预留未启用**。

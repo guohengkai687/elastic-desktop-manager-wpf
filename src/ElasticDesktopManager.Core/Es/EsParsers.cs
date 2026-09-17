@@ -188,60 +188,7 @@ public static class EsParsers
         return result;
     }
 
-    // ================= 新增：分词 / 模板 / 字段 Top 值 =================
-
-    /// <summary>解析 _analyze 响应的 tokens 数组。</summary>
-    public static List<AnalyzeToken> ParseAnalyzeTokens(string json)
-    {
-        var list = new List<AnalyzeToken>();
-        using var doc = JsonDocument.Parse(json);
-        if (!doc.RootElement.TryGetProperty("tokens", out var tokens) ||
-            tokens.ValueKind != JsonValueKind.Array)
-            return list;
-
-        foreach (var el in tokens.EnumerateArray())
-        {
-            list.Add(new AnalyzeToken
-            {
-                Token = JsonHelper.GetString(el, "token"),
-                StartOffset = GetInt(el, "start_offset"),
-                EndOffset = GetInt(el, "end_offset"),
-                Type = JsonHelper.GetString(el, "type"),
-                Position = GetInt(el, "position"),
-            });
-        }
-        return list;
-    }
-
-    /// <summary>
-    /// 解析索引模板 / 组件模板列表。两类响应结构一致：
-    /// <c>{ "&lt;name&gt;": { "index_patterns": [...], "composed_of": [...], "priority": n, "template": {...}, "_meta": {...} } }</c>
-    /// </summary>
-    public static List<EsTemplate> ParseTemplates(string json)
-    {
-        var list = new List<EsTemplate>();
-        using var doc = JsonDocument.Parse(json);
-        if (doc.RootElement.ValueKind != JsonValueKind.Object) return list;
-
-        foreach (var prop in doc.RootElement.EnumerateObject())
-        {
-            var el = prop.Value;
-            list.Add(new EsTemplate
-            {
-                Name = prop.Name,
-                IndexPatterns = JoinStringArray(el, "index_patterns"),
-                ComposedOf = JoinStringArray(el, "composed_of"),
-                Priority = el.TryGetProperty("priority", out var pr) && pr.ValueKind == JsonValueKind.Number
-                    ? pr.GetInt32().ToString()
-                    : "",
-                Version = el.TryGetProperty("version", out var v) && v.ValueKind == JsonValueKind.Number
-                    ? v.GetInt64().ToString()
-                    : "",
-                BodyJson = JsonHelper.Pretty(prop.Value.GetRawText()),
-            });
-        }
-        return list.OrderBy(x => x.Name, StringComparer.Ordinal).ToList();
-    }
+    // ================= 新增：字段 Top 值 / 别名 / 快照 =================
 
     /// <summary>解析字段 Top 值聚合（terms + cardinality）。</summary>
     public static FieldTopValuesResult ParseFieldTopValues(string json)
@@ -328,11 +275,113 @@ public static class EsParsers
                    .ToList();
     }
 
-    private static string JoinStringArray(JsonElement el, string name)    {
-        if (!el.TryGetProperty(name, out var arr) || arr.ValueKind != JsonValueKind.Array) return "";
-        return string.Join(", ", arr.EnumerateArray()
-            .Where(x => x.ValueKind == JsonValueKind.String)
-            .Select(x => x.GetString()));
+    // ================= 快照 =================
+
+    /// <summary>
+    /// 解析 _snapshot 响应：<c>{ "&lt;repo&gt;": { "type": "fs", "settings": { "location": "..." } } }</c>
+    /// </summary>
+    public static List<EsSnapshotRepository> ParseSnapshotRepositories(string json)
+    {
+        var list = new List<EsSnapshotRepository>();
+        using var doc = JsonDocument.Parse(json);
+        if (doc.RootElement.ValueKind != JsonValueKind.Object) return list;
+
+        foreach (var prop in doc.RootElement.EnumerateObject())
+        {
+            var el = prop.Value;
+            string location = "";
+            string settingsJson = "";
+            if (el.TryGetProperty("settings", out var st) && st.ValueKind == JsonValueKind.Object)
+            {
+                settingsJson = JsonHelper.Pretty(st.GetRawText());
+                location = JsonHelper.GetString(st, "location");
+            }
+
+            list.Add(new EsSnapshotRepository
+            {
+                Name = prop.Name,
+                Type = JsonHelper.GetString(el, "type"),
+                Location = location,
+                SettingsJson = settingsJson,
+            });
+        }
+        return list.OrderBy(x => x.Name, StringComparer.Ordinal).ToList();
+    }
+
+    /// <summary>解析 _snapshot/{repo}/_all 的 snapshots 数组（按开始时间倒序）。</summary>
+    public static List<EsSnapshot> ParseSnapshots(string json)
+    {
+        var list = new List<EsSnapshot>();
+        using var doc = JsonDocument.Parse(json);
+        if (!doc.RootElement.TryGetProperty("snapshots", out var arr) || arr.ValueKind != JsonValueKind.Array)
+            return list;
+
+        foreach (var el in arr.EnumerateArray())
+        {
+            var indices = new List<string>();
+            if (el.TryGetProperty("indices", out var idx) && idx.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in idx.EnumerateArray())
+                {
+                    if (item.ValueKind == JsonValueKind.String) indices.Add(item.GetString()!);
+                }
+            }
+
+            long durationMs = GetLong(el, "duration_in_millis");
+            list.Add(new EsSnapshot
+            {
+                Name = JsonHelper.GetString(el, "snapshot"),
+                State = JsonHelper.GetString(el, "state"),
+                Indices = string.Join(", ", indices),
+                IndexCount = indices.Count,
+                StartedAt = FormatEpochMillis(GetLong(el, "start_time_in_millis")),
+                Duration = durationMs > 0 ? EsMetricsFlattener.FormatDuration(durationMs) : "",
+                Version = JsonHelper.GetString(el, "version"),
+                ShardsText = ParseShardSummary(el),
+                Failures = ParseSnapshotFailures(el),
+            });
+        }
+        return list.OrderByDescending(x => x.StartedAt, StringComparer.Ordinal).ToList();
+    }
+
+    private static string ParseShardSummary(JsonElement el)
+    {
+        if (!el.TryGetProperty("shards", out var sh) || sh.ValueKind != JsonValueKind.Object) return "";
+        long total = GetLong(sh, "total");
+        if (total <= 0) return "";
+        long ok = GetLong(sh, "successful");
+        long failed = GetLong(sh, "failed");
+        return failed > 0 ? $"{ok}/{total} · {failed} failed" : $"{ok}/{total}";
+    }
+
+    private static string ParseSnapshotFailures(JsonElement el)
+    {
+        if (!el.TryGetProperty("failures", out var f) || f.ValueKind != JsonValueKind.Array) return "";
+        var parts = new List<string>();
+        foreach (var item in f.EnumerateArray())
+        {
+            string index = JsonHelper.GetString(item, "index");
+            string reason = "";
+            if (item.TryGetProperty("reason", out var r))
+                reason = r.ValueKind == JsonValueKind.String ? r.GetString()! : r.GetRawText();
+            parts.Add(string.IsNullOrEmpty(index) ? reason : $"{index}: {reason}");
+        }
+        return string.Join("; ", parts.Where(p => !string.IsNullOrEmpty(p)));
+    }
+
+    /// <summary>epoch 毫秒 → 本地时间字符串（容错：非法/为 0 时返回空串而非抛异常）。</summary>
+    private static string FormatEpochMillis(long millis)
+    {
+        if (millis <= 0) return "";
+        try
+        {
+            return DateTimeOffset.FromUnixTimeMilliseconds(millis).ToLocalTime()
+                .ToString("yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return "";
+        }
     }
 
     private static int GetInt(JsonElement el, string name)

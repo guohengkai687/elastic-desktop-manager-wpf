@@ -18,6 +18,9 @@ public partial class HealthView : UserControl
         TitleText.Text = Localization.L("home.health.title");
         EsInfoTitle.Text = Localization.L("home.esInfo.title");
         AutoRefreshCheck.Content = Localization.L("home.autoRefresh");
+        NodeLabel.Text = Localization.L("home.node");
+        UuidLabel.Text = Localization.L("home.clusterUuid");
+        VersionLabel.Text = Localization.L("home.version");
         if (DataContext is ViewModels.HealthViewModel vm)
             vm.SetActive(true);
     }

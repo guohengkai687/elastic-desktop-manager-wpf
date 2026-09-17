@@ -2,8 +2,9 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:ElasticDesktopManager.ViewModels"
+        xmlns:icons="clr-namespace:ElasticDesktopManager.Services"
         Title="Elastic Desktop Manager"
-        Height="860" Width="1400" MinHeight="700" MinWidth="1160"
+        Height="880" Width="1440" MinHeight="700" MinWidth="1160"
         WindowStartupLocation="CenterScreen"
         Closing="OnClosing">
     <Grid x:Name="RootGrid">
@@ -28,7 +29,7 @@
 
                 <!-- 品牌 -->
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <Border Width="28" Height="28" CornerRadius="{StaticResource RadiusMd}"
+                    <Border Width="28" Height="28" CornerRadius="{DynamicResource ControlRadius}"
                             Background="{DynamicResource AccentBrush}">
                         <TextBlock Text="ES" Foreground="White" FontWeight="Bold" FontSize="11"
                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
@@ -61,22 +62,29 @@
                             </Ellipse.Style>
                         </Ellipse>
                         <TextBlock Text="{Binding ConnectionLabel}" Margin="9,0,6,0" VerticalAlignment="Center" />
-                        <TextBlock Text="▾" VerticalAlignment="Center" FontSize="10"
-                                   Foreground="{DynamicResource TextSecondaryBrush}" />
+                        <Path Style="{StaticResource IconPathSmallStyle}"
+                              Data="{x:Static icons:AppIconGeometries.ChevronDown}"
+                              Stroke="{DynamicResource DimTextBrush}" />
                     </StackPanel>
                 </Button>
 
                 <Button Grid.Column="3" Style="{StaticResource IconButtonStyle}" Margin="8,0,0,0"
                         ToolTip="Theme" Command="{Binding ToggleThemeCommand}">
-                    <TextBlock Text="{Binding ThemeGlyph}" FontSize="15" />
+                    <Path Style="{StaticResource IconPathStyle}"
+                          Data="{x:Static icons:AppIconGeometries.Theme}"
+                          Stroke="{DynamicResource TextSecondaryBrush}" />
                 </Button>
                 <Button Grid.Column="4" Style="{StaticResource IconButtonStyle}"
                         ToolTip="Settings" Command="{Binding OpenSettingsCommand}">
-                    <TextBlock Text="⚙" FontSize="15" />
+                    <Path Style="{StaticResource IconPathStyle}"
+                          Data="{x:Static icons:AppIconGeometries.Settings}"
+                          Stroke="{DynamicResource TextSecondaryBrush}" />
                 </Button>
                 <Button Grid.Column="5" Style="{StaticResource IconButtonStyle}"
                         ToolTip="About" Command="{Binding OpenAboutCommand}">
-                    <TextBlock Text="ⓘ" FontSize="15" />
+                    <Path Style="{StaticResource IconPathStyle}"
+                          Data="{x:Static icons:AppIconGeometries.About}"
+                          Stroke="{DynamicResource TextSecondaryBrush}" />
                 </Button>
             </Grid>
         </Border>
@@ -88,27 +96,31 @@
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <!-- 左侧导航：图标 + 文字，选中态带强调指示条 -->
+            <!-- 左侧导航：分组 + 图标 + 文字，选中态带强调指示条 -->
             <Border Background="{DynamicResource SurfaceBrush}"
-                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0" Padding="4,8">
+                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0" Padding="6,8">
                 <ListBox ItemsSource="{Binding NavItems}" SelectedItem="{Binding SelectedNav}"
                          Background="Transparent" BorderThickness="0" Padding="0"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                     <ListBox.ItemContainerStyle>
-                        <StaticResource ResourceKey="NavListBoxItemStyle" />
+                        <!-- 分组标题不是页面：禁用容器交互，避免选中后 Navigate 拿到空 code 抛异常 -->
+                        <Style TargetType="ListBoxItem" BasedOn="{StaticResource NavListBoxItemStyle}">
+                            <Setter Property="IsEnabled" Value="{Binding IsSelectable}" />
+                        </Style>
                     </ListBox.ItemContainerStyle>
                     <ListBox.ItemTemplate>
                         <DataTemplate>
                             <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="24" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Text="{Binding Glyph}" FontSize="14" VerticalAlignment="Center"
-                                           HorizontalAlignment="Center" />
-                                <TextBlock Grid.Column="1" Text="{Binding Title}" FontSize="13"
-                                           VerticalAlignment="Center" Margin="8,0,0,0"
-                                           TextTrimming="CharacterEllipsis" />
+                                <!-- 分组标题 -->
+                                <TextBlock Text="{Binding Title}" Style="{StaticResource NavGroupLabelStyle}"
+                                           Visibility="{Binding IsGroup, Converter={StaticResource BoolToVisibility}}" />
+                                <!-- 页面项：图标描边色跟随 ListBoxItem 的 Foreground（选中态自动变强调色） -->
+                                <StackPanel Orientation="Horizontal"
+                                            Visibility="{Binding IsGroup, Converter={StaticResource InverseBoolToVisibility}}">
+                                    <Path Data="{Binding IconGeometry}" Style="{StaticResource IconPathStyle}"
+                                          Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" />
+                                    <TextBlock Text="{Binding Title}" Margin="12,0,0,0" VerticalAlignment="Center" />
+                                </StackPanel>
                             </Grid>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
@@ -141,8 +153,8 @@
         <Border x:Name="ToastHost" Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Bottom"
                 Margin="0,0,0,28" Visibility="Collapsed" Opacity="0"
                 Background="{DynamicResource OverlayBrush}"
-                CornerRadius="{StaticResource RadiusLg}" Padding="18,10"
-                Effect="{StaticResource ShadowLg}" IsHitTestVisible="False">
+                CornerRadius="{DynamicResource CardRadius}" Padding="18,10"
+                Effect="{DynamicResource ShadowLg}" IsHitTestVisible="False">
             <TextBlock x:Name="ToastText" Foreground="{DynamicResource OverlayTextBrush}" FontSize="13" />
         </Border>
     </Grid>

@@ -20,9 +20,9 @@ public partial class MainWindow : Window
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
-        // 默认显示首页
+        // 默认显示首页（FirstPage 会跳过分组标题项）
         if (DataContext is MainViewModel vm && vm.SelectedNav is null)
-            vm.SelectedNav = vm.NavItems[0];
+            vm.SelectedNav = vm.FirstPage;
     }
 
     public void NavigateTo(string pageCode)

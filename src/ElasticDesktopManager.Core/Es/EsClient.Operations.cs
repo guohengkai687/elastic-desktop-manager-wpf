@@ -35,29 +35,6 @@ public sealed partial class EsClient
     public Task<string> PutSettingsAsync(string indexName, string settingsJson, CancellationToken ct = default)
         => ExecuteAsync("PUT", IndexPath(indexName, "_settings"), settingsJson, _timeout, ct);
 
-    // ================= A3 分词调试 =================
-
-    /// <summary>POST /{index}/_analyze —— 用索引的分词器分析文本。</summary>
-    public Task<string> AnalyzeTextAsync(string indexName, string text, string? field = null,
-        string? analyzer = null, CancellationToken ct = default)
-        => ExecuteAsync("POST", IndexPath(indexName, "_analyze"), BuildAnalyzeBody(text, field, analyzer), _timeout, ct);
-
-    /// <summary>
-    /// POST /_analyze —— 不指定索引，用内置分词器分析文本。
-    /// 刻意用不同方法名：与 <see cref="AnalyzeTextAsync(string,string,string?,string?,CancellationToken)"/>
-    /// 同为 (string, string?) 起始签名，重载会产生调用歧义（编译期 CS0121）。
-    /// </summary>
-    public Task<string> AnalyzeTextWithBuiltinAsync(string text, string? analyzer = null, CancellationToken ct = default)
-        => ExecuteAsync("POST", "/_analyze", BuildAnalyzeBody(text, null, analyzer), _timeout, ct);
-
-    private static string BuildAnalyzeBody(string text, string? field, string? analyzer)
-    {
-        var body = new JsonObject { ["text"] = text };
-        if (!string.IsNullOrWhiteSpace(field)) body["field"] = field.Trim();
-        if (!string.IsNullOrWhiteSpace(analyzer)) body["analyzer"] = analyzer.Trim();
-        return body.ToJsonString();
-    }
-
     // ================= A4 字段 Top 值 =================
 
     /// <summary>
@@ -190,63 +167,6 @@ public sealed partial class EsClient
         return ExecuteAsync("POST", "/_reindex", body.ToJsonString(), _sqlTimeout, ct);
     }
 
-    // ================= A7 模板 =================
-
-    /// <summary>GET /_index_template —— 可组合索引模板（ES 7.8+）。</summary>
-    public Task<string> GetIndexTemplatesAsync(CancellationToken ct = default)
-        => ExecuteAsync("GET", "/_index_template", null, _timeout, ct);
-
-    /// <summary>GET /_component_template —— 组件模板。</summary>
-    public Task<string> GetComponentTemplatesAsync(CancellationToken ct = default)
-        => ExecuteAsync("GET", "/_component_template", null, _timeout, ct);
-
-    /// <summary>PUT /_index_template/{name} —— 创建/更新可组合索引模板。</summary>
-    public Task<string> PutIndexTemplateAsync(string name, string bodyJson, CancellationToken ct = default)
-        => ExecuteAsync("PUT", "/_index_template/" + Uri.EscapeDataString(name), bodyJson, _timeout, ct);
-
-    /// <summary>DELETE /_index_template/{name}</summary>
-    public Task<string> DeleteIndexTemplateAsync(string name, CancellationToken ct = default)
-        => ExecuteAsync("DELETE", "/_index_template/" + Uri.EscapeDataString(name), null, _timeout, ct);
-
-    /// <summary>DELETE /_component_template/{name}</summary>
-    public Task<string> DeleteComponentTemplateAsync(string name, CancellationToken ct = default)
-        => ExecuteAsync("DELETE", "/_component_template/" + Uri.EscapeDataString(name), null, _timeout, ct);
-
-    // ================= A8 诊断 =================
-
-    /// <summary>
-    /// GET /_cluster/allocation/explain —— 诊断分片未分配 / 不可移动的原因。
-    /// 三者都为空时诊断第一个未分配分片（ES 默认行为）。
-    /// </summary>
-    public Task<string> ExplainAllocationAsync(string? index = null, int? shard = null,
-        bool? primary = null, CancellationToken ct = default)
-    {
-        var body = new JsonObject();
-        if (!string.IsNullOrWhiteSpace(index)) body["index"] = index.Trim();
-        if (shard is not null) body["shard"] = shard.Value;
-        if (primary is not null) body["primary"] = primary.Value;
-
-        // 无参数时 ES 要求空 body 或显式 {}；统一发 {} 更稳定
-        return ExecuteAsync("POST", "/_cluster/allocation/explain", body.ToJsonString(), _timeout, ct);
-    }
-
-    /// <summary>GET /_nodes/hot_threads —— 热点线程堆栈（纯文本响应）。</summary>
-    public Task<string> HotThreadsAsync(string? nodeId = null, CancellationToken ct = default)
-    {
-        var path = string.IsNullOrWhiteSpace(nodeId)
-            ? "/_nodes/hot_threads"
-            : "/_nodes/" + Uri.EscapeDataString(nodeId.Trim()) + "/hot_threads";
-        return ExecuteAsync("GET", path, null, _timeout, ct);
-    }
-
-    /// <summary>GET /_nodes/thread_pool —— 各节点线程池活跃/队列/拒绝统计。</summary>
-    public Task<string> GetThreadPoolAsync(CancellationToken ct = default)
-        => ExecuteAsync("GET", "/_nodes/thread_pool", null, _timeout, ct);
-
-    /// <summary>GET /_cluster/pending_tasks —— 主节点待处理任务。</summary>
-    public Task<string> GetPendingTasksAsync(CancellationToken ct = default)
-        => ExecuteAsync("GET", "/_cluster/pending_tasks", null, _timeout, ct);
-
     // ================= A9 Force Merge =================
 
     /// <summary>POST /{index}/_forcemerge —— 强制段合并（maxSegments 默认 1）。</summary>
@@ -254,6 +174,73 @@ public sealed partial class EsClient
     {
         var path = IndexPath(indexName, "_forcemerge") + "?max_num_segments=" + Math.Max(1, maxSegments);
         return ExecuteAsync("POST", path, null, _sqlTimeout, ct);
+    }
+
+    // ================= A10 快照管理 =================
+
+    /// <summary>GET /_snapshot —— 全部快照仓库。</summary>
+    public Task<string> GetSnapshotRepositoriesAsync(CancellationToken ct = default)
+        => ExecuteAsync("GET", "/_snapshot", null, _timeout, ct);
+
+    /// <summary>PUT /_snapshot/{repository} —— 创建/更新仓库；body 必须含 type 与 settings。</summary>
+    public Task<string> CreateSnapshotRepositoryAsync(string repository, string bodyJson, CancellationToken ct = default)
+        => ExecuteAsync("PUT", "/_snapshot/" + Uri.EscapeDataString(repository), bodyJson, _sqlTimeout, ct);
+
+    /// <summary>DELETE /_snapshot/{repository} —— 只删仓库定义；磁盘上的快照文件需手动清理。</summary>
+    public Task<string> DeleteSnapshotRepositoryAsync(string repository, CancellationToken ct = default)
+        => ExecuteAsync("DELETE", "/_snapshot/" + Uri.EscapeDataString(repository), null, _sqlTimeout, ct);
+
+    /// <summary>POST /_snapshot/{repository}/_verify —— 校验仓库可用性（读写权限、并发等）。</summary>
+    public Task<string> VerifySnapshotRepositoryAsync(string repository, CancellationToken ct = default)
+        => ExecuteAsync("POST", "/_snapshot/" + Uri.EscapeDataString(repository) + "/_verify", null, _sqlTimeout, ct);
+
+    /// <summary>GET /_snapshot/{repository}/_all —— 该仓库下的全部快照。</summary>
+    public Task<string> GetSnapshotsAsync(string repository, CancellationToken ct = default)
+        => ExecuteAsync("GET", "/_snapshot/" + Uri.EscapeDataString(repository) + "/_all", null, _timeout, ct);
+
+    /// <summary>GET /_snapshot/_status —— 进行中的快照/恢复进度。</summary>
+    public Task<string> GetSnapshotStatusAsync(CancellationToken ct = default)
+        => ExecuteAsync("GET", "/_snapshot/_status", null, _timeout, ct);
+
+    /// <summary>
+    /// PUT /_snapshot/{repository}/{snapshot} —— 创建快照。
+    /// 用 wait_for_completion=false 立即返回，避免大集群下请求长时间挂住 UI。
+    /// </summary>
+    public Task<string> CreateSnapshotAsync(string repository, string snapshot, string? indices = null,
+        bool includeGlobalState = false, CancellationToken ct = default)
+    {
+        string path = $"/_snapshot/{Uri.EscapeDataString(repository)}/{Uri.EscapeDataString(snapshot)}"
+                      + "?wait_for_completion=false";
+        return ExecuteAsync("PUT", path, SnapshotBody(indices, includeGlobalState), _sqlTimeout, ct);
+    }
+
+    /// <summary>DELETE /_snapshot/{repository}/{snapshot}</summary>
+    public Task<string> DeleteSnapshotAsync(string repository, string snapshot, CancellationToken ct = default)
+        => ExecuteAsync("DELETE",
+            $"/_snapshot/{Uri.EscapeDataString(repository)}/{Uri.EscapeDataString(snapshot)}", null, _sqlTimeout, ct);
+
+    /// <summary>
+    /// POST /_snapshot/{repository}/{snapshot}/_restore —— 恢复到当前集群。
+    /// 同样用 wait_for_completion=false；恢复到已存在的同名索引会失败（由 ES 校验）。
+    /// </summary>
+    public Task<string> RestoreSnapshotAsync(string repository, string snapshot, string? indices = null,
+        bool includeGlobalState = false, CancellationToken ct = default)
+    {
+        string path = $"/_snapshot/{Uri.EscapeDataString(repository)}/{Uri.EscapeDataString(snapshot)}/_restore"
+                      + "?wait_for_completion=false";
+        return ExecuteAsync("POST", path, SnapshotBody(indices, includeGlobalState), _sqlTimeout, ct);
+    }
+
+    /// <summary>快照/恢复共用的 body：索引为空视为全部（*）。</summary>
+    private static string SnapshotBody(string? indices, bool includeGlobalState)
+    {
+        var body = new JsonObject
+        {
+            ["indices"] = string.IsNullOrWhiteSpace(indices) ? "*" : indices.Trim(),
+            ["ignore_unavailable"] = true,
+            ["include_global_state"] = includeGlobalState,
+        };
+        return body.ToJsonString();
     }
 
     // ================= 工具 =================

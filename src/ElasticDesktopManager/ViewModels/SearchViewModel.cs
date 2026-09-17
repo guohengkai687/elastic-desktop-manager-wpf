@@ -56,6 +56,14 @@ public class SearchViewModel : PageViewModelBase
         set => SetProperty(ref _selectedIndex, value);
     }
 
+    /// <summary>索引下拉右侧的状态：加载成功显示数量，失败显示原因（不再静默）。</summary>
+    private string _indexHint = "";
+    public string IndexHint
+    {
+        get => _indexHint;
+        private set => SetProperty(ref _indexHint, value);
+    }
+
     private int _timeoutSec = 30;
     public int TimeoutSec
     {
@@ -127,8 +135,15 @@ public class SearchViewModel : PageViewModelBase
 
     private async Task LoadIndicesAsync(bool busy, bool silent)
     {
-        if (!HasConnection) return;
-        await RunAsync(async () =>
+        if (!HasConnection)
+        {
+            IndexHint = "";
+            return;
+        }
+
+        if (busy) Ui.SetBusy(true);
+        IsLoading = true;
+        try
         {
             string json = await Client.GetIndicesAsync("/_cat/indices?format=json&h=index");
             var names = new List<string>();
@@ -142,7 +157,21 @@ public class SearchViewModel : PageViewModelBase
 
             if (string.IsNullOrEmpty(SelectedIndex) && Indices.Count > 0)
                 SelectedIndex = Indices[0];
-        }, busy, silent);
+
+            IndexHint = $"{Indices.Count}";
+        }
+        catch (Exception ex)
+        {
+            // 静默模式也必须把原因显示在页面上：此前失败被完全吞掉，
+            // 表现为"下拉是空的、也没有任何提示"，用户无法判断是没索引还是请求失败。
+            IndexHint = ex is EsException e ? e.Message : ex.Message;
+            if (!silent) Ui.Error(null, IndexHint);
+        }
+        finally
+        {
+            IsLoading = false;
+            if (busy) Ui.SetBusy(false);
+        }
     }
 
     public void PreselectIndex(string indexName)

@@ -60,8 +60,13 @@ public class ConnectionsViewModel : ObservableObject
         get => _selected;
         set
         {
-            if (SetProperty(ref _selected, value))
-                OnPropertyChanged(nameof(HasSelection));
+            if (!SetProperty(ref _selected, value)) return;
+            // 注意：所有"依赖 Selected 的只读派生属性"都必须在这里显式通知。
+            // 历史缺陷：此前只通知了 HasSelection，漏了 CanConnect，导致选中集群后
+            // 「连接」「测试」按钮永远停在初始的 IsEnabled=false（编辑/删除却正常亮起），
+            // 只有双击才能连上（双击直接 Execute 命令，绕过了 IsEnabled）。
+            OnPropertyChanged(nameof(HasSelection));
+            OnPropertyChanged(nameof(CanConnect));
         }
     }
 

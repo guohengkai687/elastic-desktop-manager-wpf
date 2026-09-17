@@ -25,7 +25,8 @@ public partial class App : Application
         };
 
         Localization.SetLanguage(Settings.Language);
-        ThemeService.ApplyTheme(Settings.Theme);
+        // 跟随系统（AutoTheme）时由 ThemeService 读注册表决定初始主题，并订阅系统个性化变更
+        ThemeService.ApplyFromSettings();
 
         var main = new MainWindow();
         MainWindow = main;
