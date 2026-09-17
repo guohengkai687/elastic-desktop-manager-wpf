@@ -230,6 +230,11 @@
 > 本文档与 TASKS.md / archive 里引用的哈希已按映射同步为新哈希
 > （例：`8d41960`→`835e3a1`、`2690d50`→`7a0b135`、`9f6e0c0`→`2b49f0d`、`bc11ea0`→`042bf1a`）。
 > 若在别处（更早的对话或旧报告）看到旧哈希，属重写前的引用。
+>
+> **发布后调整（默认分支 `main` → `master`）**：按用户要求把远程默认分支改名为 `master`。
+> 远端用 GitHub API `POST /repos/{owner}/{repo}/branches/main/rename`（服务端顺带把默认分支指向 `master`，
+> 现仅存 `master` 一个分支）；本地 `git branch -m main master`，upstream 与 remote-tracking 改指 `origin/master`。
+> **提交内容未变**（仍为 `f5fc931`），克隆地址与 `README` 里的命令不受影响。
 
 <details>
 <summary>历史重写的完整哈希映射（旧 → 新，16 个被重写的提交）</summary>
