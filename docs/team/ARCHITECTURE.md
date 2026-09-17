@@ -201,7 +201,7 @@ Common 用 `StaticResource` 引用令牌，令牌字典必须先合并，否则�
   Mapping/Settings 提取、Reindex/别名非法 JSON 统一抛 `EsException`。
 - 结果：**105 通过 / 0 失败**。
 
-### 静态守卫（`tests/binding-guard`，23 项，其中 7 条为守卫自检）
+### 静态守卫（`tests/binding-guard`，29 项，其中 10 条为守卫自检）
 | 规则 | 防的问题 |
 |---|---|
 | 只读属性 + 默认 TwoWay 目标 | `TextBox.Text` 等绑 `private set` → **运行期抛异常、编译零错误** |
@@ -216,12 +216,15 @@ Common 用 `StaticResource` 引用令牌，令牌字典必须先合并，否则�
 | **不得用字面量下标增删 MergedDictionaries** | 合并顺序一变就拆掉控件模板（第 3 轮"UI 变回旧样子"的根因） |
 | **可编辑 ComboBox 模板必须含 `PART_EditableTextBox`** | 模板缺部件 → WPF 进不了编辑态，下拉不可用（第 4 轮的真实缺陷） |
 | **ComboBox 收起态展示器必须绑定 `ContentTemplateSelector`** | `DisplayMemberPath` 是靠 `ItemTemplateSelector` 实现的 → 缺这一行时收起态显示数据对象的 `ToString`（第 5 轮用户截图发现的真实缺陷，见 ADR-11） |
-| **DataGrid 列数必须等于 code-behind 表头映射的项数** | 表头按下标赋值且越界静默跳过 → 多加/少加一列只丢一个表头，其它门禁全绿 |
+| **DataGrid 列数必须等于 code-behind 表头映射的项数（覆盖全部 9 张表）** | 表头按下标赋值且越界静默跳过 → 多加/少加一列只丢一个表头，其它门禁全绿。规则还钉死"扫描到 9 张表"，表被改名/删掉时必须显式更新规则，不许悄悄缩小覆盖面 |
+| **XAML 里 `Header`/`ToolTip` 不得写死文案** | 写死的值在 code-behind 执行前就已经渲染过一帧；更糟的是它让"漏了本地化"看起来像"故意的"（第 6 轮 33 处写死表头就是这么留下来的） |
+| **形参以 `Key` 结尾的方法，调用点不得传 `Localization.L(...)`** | 双重翻译：译文被当 key 再查一次，`L()` 查不到就原样返回 → 中文界面看着完全正常、**英文界面弹框仍是中文**（第 7 轮索引页 7 处真实缺陷） |
+| **订阅语言切换的页面视图必须调 VM 的 `Relocalize()`** | 视图只刷得动自己的 chrome；"共 N 条/第 N 页/指标卡标签"活在 VM 里，不叫 VM 重算就是"标题变了、统计还是旧语言" |
 | **代码里用到的 i18n key 必须存在** | 漏词条 → 界面直接显示 `common.save` 这种 key（第 4 轮发现 2 处历史遗留） |
 | **zh/en 同一条词条的占位符必须一致** | 漏占位符 → 英文界面静默丢参数；多占位符 → `FormatException` 被吞后直接显示带 `{}` 的格式串 |
 | **每个 Window 根元素必须显式套用 `WindowBaseStyle`** | 新增窗口会静默退回系统白底（ADR-9 的护栏） |
-| **页面视图 code-behind 本地化必须订阅 `LanguageChanged`** | 页面被缓存、切语言不会重新 Loaded → 整页 chrome 停在旧语言（第 4 轮 SnapshotView、第 5 轮 SearchView 各踩一次） |
-| 守卫自检（7 条） | **假绿**：规则失效却仍显示 PASS |
+| **页面视图 code-behind 本地化必须订阅 `LanguageChanged`** | 页面被缓存、切语言不会重新 Loaded → 整页 chrome 停在旧语言（第 4 轮 SnapshotView、第 5 轮 SearchView 各踩一次；第 7 轮把其余 8 个页面全部修完，债务清单已清零） |
+| 守卫自检（10 条） | **假绿**：规则失效却仍显示 PASS |
 
 **关键设计：守卫必须"能失败"**。每条新规则都配自检喂违规样本；本轮还修掉了一个真实误报（见下）。
 
@@ -386,6 +389,41 @@ UI 用 `→` 呈现执行链，必须按 `TimeseriesLifecycleType.ORDERED_VALID_
 
 ---
 
+## ADR-14：语言切换的责任归属 —— 订阅在视图、重算在 VM、文案只有一个来源
+
+**决策**：
+
+1. **订阅点只放在视图侧**。页面被 `MainViewModel` 缓存后与应用同生命周期，视图订阅静态事件不会泄漏。
+   `PageViewModelBase` **不**订阅 `Localization.LanguageChanged`；它只提供
+   `public void Relocalize()`（基类先重发空态文案 `NotConnectedTitle`/`NotConnectedHint` 的通知）
+   与 `protected virtual void OnRelocalize()`（子类重算自己拼装/缓存的字符串）。
+2. 视图的 `LanguageChanged` 处理器做两件事：`Localize()`（自己的 `x:Name` chrome）+ `(DataContext as PageViewModelBase)?.Relocalize()`。
+3. **弹窗（`Window` 根）不订阅**：每次都是新构造的，构造时取到的就是当前语言；订阅反而让静态事件永久持有已关闭的窗口。
+   `MainWindow` 是单例，所以它单独订阅（右上角三个图标按钮的提示）。
+4. **文案只有一个来源**：XAML 里不写 `Header`/`ToolTip` 文案（表头在 code-behind 的 `XxxHeaders` 映射里按当前语言赋），
+   `StringFormat` 里也不带文字前缀。引用 key 求文案一律经 `Localization.L(key)`，**不把译文再当 key 传回去**。
+
+**背景（为什么订阅不能写进 VM 基类）**：`IndexToolsViewModel` 继承 `PageViewModelBase`，
+但每次打开索引工具窗都会 `new` 一个。若订阅写在基类构造里，静态事件会把这个 VM（连同窗口）永久持有 —— 开 N 次漏 N 个。
+页面 VM 都是缓存的（不会漏），但"同一个基类里有的实例缓存、有的瞬态"是最容易在半年后出错的地方，
+所以把生命周期敏感的动作统一放在与视图同生命周期的一侧。
+
+**代价 / 纪律**：
+
+- 视图必须记得调 `Relocalize()` → 守卫规则强制（订阅了却不调 = 直接报错）。
+- **新增一个"加载时拼好"的 VM 文案，必须同时写进 `OnRelocalize()`**：静态检查只守得住"视图调了没有"，
+  守不住"子类漏算了某个属性"。这是本条 ADR 唯一依赖人为纪律的地方，已在 TASKS 的"未做"里如实登记。
+- 重算要带"加载过"门闩（`_hasData`）：否则从没打开过的页面在切语言时会凭空显示"节点统计：0"。
+- 错误文案（ES 原文、抛出的 message）**不参与**重算：它不需要翻译，重算反而会把它覆盖掉
+  （`SearchViewModel._indexHintIsError` / 快照页五条状态行的 `IsError`）。
+
+**背景（第 7 轮的真实缺陷）**：`IndicesViewModel` 里 `CreateConfirm`/`ShowJson` 的形参约定收的是**词条 key**
+（方法体内再 `L()` 一次），调用点却传了 `Localization.L("index.confirm.refresh")` 的结果。
+`L()` 查不到就原样返回 → 中文界面看起来完全正常，**英文界面的确认框与 JSON 窗标题仍是中文**。
+静态检查原先只查"`L("字面量")` 是不是词条"，看不见这层间接；本轮补了守卫规则（形参以 `Key` 结尾 ⇒ 实参不得是 `L(...)`）。
+
+---
+
 ## 风险登记（按严重度）
 
 | # | 风险 | 缓解 |
@@ -409,7 +447,11 @@ UI 用 `→` 呈现执行链，必须按 `TimeseriesLifecycleType.ORDERED_VALID_
 | R17 | **同名不同型的 ES 时间/枚举字段**（ILM `modified_date` 是毫秒、SLM 的是 ISO；ILM `phases` 是 HashMap 顺序） | ADR-12：以官方源码为准 + fixture 抄真实形状 + 断言正向钉死格式化结果 |
 | R18 | **按下标赋值的表头静默错位**：`ApplyHeaders` 越界跳过 → 只丢一个表头 | 守卫「DataGrid 列数 ↔ 表头数组项数」规则（并纠正了文档里 9/8 的旧计数笔误） |
 | R19 | **把分页做成客户端分页**：ES `_search` 默认只回 10 条，客户端翻不出其余命中（用户真实反馈："总命中 2570 却只有 10 行"） | ADR-13：`from`/`size` 必须由服务端执行；分页数学放 Core 单测钉死（无静态特征可守） |
-| R20 | **缓存页面的 code-behind 文案不随语言切换**：`MainViewModel` 只刷新导航标题，页面不会重新 Loaded（**已发生 2 次**：SnapshotView、SearchView） | 守卫「页面视图本地化必须订阅 `LanguageChanged`」规则 + **只允许缩短**的债务清单（8 个历史遗留文件登记在 TASKS 第 6 轮） |
+| R20 | **缓存页面的 code-behind 文案不随语言切换**：`MainViewModel` 只刷新导航标题，页面不会重新 Loaded（**已发生 2 次**：SnapshotView、SearchView） | 守卫「页面视图本地化必须订阅 `LanguageChanged`」规则 + **只允许缩短**的债务清单；第 7 轮把 8 个历史遗留文件全部修完，清单已清零（机制保留） |
+| R21 | **文案有两处来源**：XAML 里写死字面量 + code-behind 里按词条赋值 → 漏改时看着像"故意的"，且写死的值会先渲染一帧（**已发生**：33 处表头 + 7 处 ToolTip） | 守卫「XAML 里 `Header`/`ToolTip` 不得写死文案」规则；表头只存在于 `XxxHeaders` 映射里 |
+| R22 | **双重翻译**：把 `L()` 的译文当 key 再传一次，`L()` 查不到就原样返回 → 中文界面正常、**英文界面仍是中文**（**已发生**：索引页 7 处） | 守卫「形参以 `Key` 结尾的方法不得传 `L(...)`」规则（含泛型逗号/实参里 lambda 的自检） |
+| R23 | **VM 侧缓存文案不随语言切换**：视图 chrome 切了、VM 拼的"共 N 条/第 N 页/指标卡标签"没切 → 中英混排 | ADR-14 的 `Relocalize()`/`OnRelocalize()` + 守卫「订阅了必须调 `Relocalize()`」规则；漏算某个子类属性仍靠人工纪律（已登记） |
+| R24 | **守卫规则自己会"缩小覆盖面"**：表被改名/删掉、模板被换写法时，规则可能悄悄失去保护对象而继续 PASS | 每条规则都要求"必须能找到被保护的对象，找不到就报错"；本轮把"列数↔表头映射"规则钉死为"必须恰好 9 张表"，并补了 `x:Name="Grid"` 这种"只有后缀没有语义前缀"的判据缺陷 |
 
 ## 未完成 / 后续批次（如实声明）
 

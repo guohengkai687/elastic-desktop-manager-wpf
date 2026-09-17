@@ -50,6 +50,30 @@ public abstract class PageViewModelBase : ObservableObject, IReloadablePage
             await AutoReloadAsync();
     }
 
+    /// <summary>
+    /// 语言切换时刷新本页 VM 侧拼装的文案。
+    /// <para>
+    /// 由**页面视图**的语言处理器调用（视图订阅 <see cref="Localization.LanguageChanged"/> 并在此后调本方法）：
+    /// 视图缓存后与应用同生命周期，而 VM 未必——索引工具窗每次打开都会新建一个 VM，
+    /// 若改由 VM 订阅静态事件，关窗后 VM 会被事件永久持有（越开越漏）。所以订阅的责任留在视图侧。
+    /// </para>
+    /// <para>基类先刷新空态文案（<see cref="NotConnectedTitle"/>/<see cref="NotConnectedHint"/>），再交给子类重算自己的缓存文案。</para>
+    /// </summary>
+    public void Relocalize()
+    {
+        OnPropertyChanged(nameof(NotConnectedTitle));
+        OnPropertyChanged(nameof(NotConnectedHint));
+        OnRelocalize();
+    }
+
+    /// <summary>
+    /// 子类重算自己拼装/缓存的本地化文案（如 “共 N 条” 这类在加载时拼好、之后不会再算的字符串）。
+    /// 默认无操作：文案每次都现算的页面（如 REST 页）不需要重写。
+    /// </summary>
+    protected virtual void OnRelocalize()
+    {
+    }
+
     /// <summary>连接未建立时提示并返回 false。</summary>
     protected bool RequireConnection()
     {

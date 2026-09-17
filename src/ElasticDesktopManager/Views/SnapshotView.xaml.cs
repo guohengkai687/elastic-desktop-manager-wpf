@@ -51,7 +51,13 @@ public partial class SnapshotView : UserControl
         // 页面被 MainViewModel 缓存，从模态设置框切换语言时不会触发 Unloaded/Loaded，
         // 所以必须显式订阅语言变更，否则整页 chrome 会停在旧语言（而 VM 的状态行已切新语言）。
         // 视图与应用同生命周期，无需解绑。
-        Localization.LanguageChanged += Localize;
+        Localization.LanguageChanged += OnLanguageChanged;
+    }
+
+    private void OnLanguageChanged()
+    {
+        Localize();
+        (DataContext as ViewModels.PageViewModelBase)?.Relocalize();   // 五条状态行/统计是 VM 拼的
     }
 
     private void Localize()

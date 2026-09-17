@@ -72,6 +72,12 @@ public class MetricsViewModel : PageViewModelBase
 
     private List<MetricGroupVm> _all = new();
 
+    /// <summary>指标总数（加载时数出来，语言切换时重拼摘要用）。</summary>
+    private int _total;
+
+    /// <summary>是否成功加载过：没加载过就别在切语言时凭空显示"指标总数：0"。</summary>
+    private bool _hasData;
+
     /// <summary>当前展开状态在刷新后保留，避免用户折叠的分组又弹开。</summary>
     private readonly Dictionary<string, bool> _expandedState = new();
 
@@ -109,7 +115,9 @@ public class MetricsViewModel : PageViewModelBase
                 _all[0].IsExpanded = true;
 
             ApplyFilter();
-            Summary = $"{Localization.L("metrics.summary")}：{rows.Count}";
+            _total = rows.Count;
+            _hasData = true;
+            UpdateSummary();
         }, busy, silent);
     }
 
@@ -144,9 +152,20 @@ public class MetricsViewModel : PageViewModelBase
         Groups.ReplaceAll(shown);
     }
 
-    /// <summary>语言切换时刷新分组标题。</summary>
-    public void RefreshTitles()
+    /// <summary>指标总数在加载时数出来，语言切换必须按当前语言重拼。</summary>
+    private void UpdateSummary()
+    {
+        if (!_hasData) return;
+        Summary = Localization.L("metrics.summary", _total);
+    }
+
+    /// <summary>
+    /// 语言切换：分组标题虽然每次都现读词条，但绑定只在 PropertyChanged 时刷新，
+    /// 所以必须重发通知；摘要字符串是拼好缓存的，要重拼。
+    /// </summary>
+    protected override void OnRelocalize()
     {
         foreach (var g in Groups) g.RefreshTitle();
+        UpdateSummary();
     }
 }

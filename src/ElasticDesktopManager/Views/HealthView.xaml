@@ -20,8 +20,7 @@
                                Text="{Binding ClusterName, Mode=OneWay}" />
                     <CheckBox Grid.Column="2" x:Name="AutoRefreshCheck" VerticalAlignment="Center" Margin="0,0,12,0"
                               IsChecked="{Binding AutoRefresh}" />
-                    <Button Grid.Column="3" Click="OnRefresh" Style="{StaticResource IconButtonStyle}"
-                            ToolTip="Refresh">
+                    <Button x:Name="RefreshButton" Grid.Column="3" Click="OnRefresh" Style="{StaticResource IconButtonStyle}">
                         <Path Style="{StaticResource IconPathStyle}"
                               Data="{x:Static icons:AppIconGeometries.Refresh}"
                               Stroke="{DynamicResource TextSecondaryBrush}" />

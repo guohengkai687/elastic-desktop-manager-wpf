@@ -88,13 +88,20 @@ public class IndicesViewModel : PageViewModelBase
     public int TotalItems
     {
         get => _totalItems;
-        private set => SetProperty(ref _totalItems, value);
+        private set
+        {
+            if (SetProperty(ref _totalItems, value))
+                OnPropertyChanged(nameof(TotalText));
+        }
     }
 
     public int TotalPages => PageSize <= 0 ? 0 : (int)Math.Ceiling(_filtered.Count / (double)PageSize);
     public bool CanPrev => PageIndex > 1;
     public bool CanNext => PageIndex < TotalPages;
     public string PageInfoText => $"{Localization.L("sql.page", PageIndex)} / {Math.Max(TotalPages, 1)}";
+
+    /// <summary>“总数：N”。XAML 里原来写的是 StringFormat=Total: {0}，英文前缀在中文界面不会变。</summary>
+    public string TotalText => Localization.L("index.total", TotalItems);
 
     public ICommand PrevCommand { get; }
     public ICommand NextCommand { get; }
@@ -116,13 +123,22 @@ public class IndicesViewModel : PageViewModelBase
             var row = Param(p);
             if (row is not null) Ui.NavigateSearch(row.Name);
         });
-        DetailsCommand = new AsyncRelayCommand(p => ShowJson(p, Localization.L("index.detail"), (c, name) => c.GetIndexDetailsAsync(name)));
-        StatsCommand = new AsyncRelayCommand(p => ShowJson(p, Localization.L("index.stats"), (c, name) => c.GetIndexStatsAsync(name)));
-        RefreshIndexCommand = CreateConfirm(Localization.L("index.confirm.refresh"), (c, i) => c.RefreshIndexAsync(i.Name, CancellationToken.None));
-        FlushCommand = CreateConfirm(Localization.L("index.confirm.flush"), (c, i) => c.FlushIndexAsync(i.Name, CancellationToken.None));
-        CleanCacheCommand = CreateConfirm(Localization.L("index.confirm.clean"), (c, i) => c.ClearIndexCacheAsync(i.Name, CancellationToken.None));
-        OpenCommand = CreateConfirm(Localization.L("index.confirm.open"), (c, i) => c.OpenIndexAsync(i.Name, CancellationToken.None));
-        CloseCommand = CreateConfirm(Localization.L("index.confirm.close"), (c, i) => c.CloseIndexAsync(i.Name, CancellationToken.None));
+        // 传 key 而不是译文：译文传进来后 RunAction/ShowJson 还会再 L() 一次，
+        // L() 查不到就原样返回 —— 中文界面看着正常，切英文时弹框仍是中文。
+        DetailsCommand = new AsyncRelayCommand(p => ShowJson(p, "index.detail", (c, name) => c.GetIndexDetailsAsync(name)));
+        StatsCommand = new AsyncRelayCommand(p => ShowJson(p, "index.stats", (c, name) => c.GetIndexStatsAsync(name)));
+        RefreshIndexCommand = CreateConfirm("index.confirm.refresh", (c, i) => c.RefreshIndexAsync(i.Name, CancellationToken.None));
+        FlushCommand = CreateConfirm("index.confirm.flush", (c, i) => c.FlushIndexAsync(i.Name, CancellationToken.None));
+        CleanCacheCommand = CreateConfirm("index.confirm.clean", (c, i) => c.ClearIndexCacheAsync(i.Name, CancellationToken.None));
+        OpenCommand = CreateConfirm("index.confirm.open", (c, i) => c.OpenIndexAsync(i.Name, CancellationToken.None));
+        CloseCommand = CreateConfirm("index.confirm.close", (c, i) => c.CloseIndexAsync(i.Name, CancellationToken.None));
+    }
+
+    /// <summary>语言切换：页码/总数都是每次现读词条的，重发通知即可。</summary>
+    protected override void OnRelocalize()
+    {
+        OnPropertyChanged(nameof(PageInfoText));
+        OnPropertyChanged(nameof(TotalText));
     }
 
     public override Task ReloadAsync() => LoadAsync(busy: true, silent: false);
@@ -172,7 +188,7 @@ public class IndicesViewModel : PageViewModelBase
 
     private static IndexRow? Param(object? p) => p as IndexRow;
 
-    private async Task ShowJson(object? p, string title, Func<EsClient, string, Task<string>> fetch)
+    private async Task ShowJson(object? p, string titleKey, Func<EsClient, string, Task<string>> fetch)
     {
         var row = Param(p);
         if (row is null || !RequireConnection()) return;
@@ -181,7 +197,7 @@ public class IndicesViewModel : PageViewModelBase
             string raw = await fetch(Client, row.Name);
             string pretty = JsonHelper.Pretty(raw);
             await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
-                new JsonViewerWindow($"{title} ({row.Name})", pretty) { Owner = Ui.Main }.ShowDialog());
+                new JsonViewerWindow($"{Localization.L(titleKey)} ({row.Name})", pretty) { Owner = Ui.Main }.ShowDialog());
         });
     }
 

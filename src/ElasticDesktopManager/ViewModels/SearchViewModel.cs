@@ -66,6 +66,9 @@ public class SearchViewModel : PageViewModelBase
         private set => SetProperty(ref _indexHint, value);
     }
 
+    /// <summary>提示当前是"索引数量/没有索引"（可重算）还是 ES 的报错原文（不可覆盖）。</summary>
+    private bool _indexHintIsError;
+
     private int _timeoutSec = 30;
     public int TimeoutSec
     {
@@ -234,6 +237,7 @@ public class SearchViewModel : PageViewModelBase
         if (!HasConnection)
         {
             IndexHint = "";
+            _indexHintIsError = false;
             return;
         }
 
@@ -248,15 +252,15 @@ public class SearchViewModel : PageViewModelBase
             if (string.IsNullOrEmpty(SelectedIndex) && Indices.Count > 0)
                 SelectedIndex = Indices[0];
 
-            // 0 个索引也要说清楚：是集群里真的没有索引，而不是"没加载出来"
-            IndexHint = Indices.Count > 0
-                ? Localization.L("search.index.count", Indices.Count)
-                : Localization.L("search.index.empty");
+            _indexHintIsError = false;
+            UpdateIndexHint();
         }
         catch (Exception ex)
         {
             // 静默模式也必须把原因显示在页面上：此前失败被完全吞掉，
             // 表现为"下拉是空的、也没有任何提示"，用户无法判断是没索引还是请求失败。
+            // 错误文案是 ES 原文，不算"本地化文案"，切语言时不能被覆盖。
+            _indexHintIsError = true;
             IndexHint = ex is EsException e ? e.Message : ex.Message;
             if (!silent) Ui.Error(null, IndexHint);
         }
@@ -452,14 +456,22 @@ public class SearchViewModel : PageViewModelBase
         await GoToPageAsync(page);
     }
 
-    /// <summary>由视图在语言切换时调用：重算本 VM 拼装的动态文案（视图 chrome 由视图自己刷新）。</summary>
-    public void Relocalize()
+    /// <summary>语言切换：重算本 VM 拼装的动态文案（视图 chrome 由视图自己刷新）。由 SearchView 的处理器调用。</summary>
+    protected override void OnRelocalize()
     {
         PageSizeOptions = BuildPageSizeOptions();
         OnPropertyChanged(nameof(PageSizeOptions));
         if (_hasSearched) SummaryText = BuildSummaryText();
         RaisePagingChanged();
+        // 索引下拉的提示也是加载时拼好的；未连接时保持空，出错时保留 ES 原文
+        if (HasConnection && !_indexHintIsError) UpdateIndexHint();
     }
+
+    /// <summary>索引下拉的提示文案：只在"真的加载过"之后才算数（0 个索引也要说清楚）。</summary>
+    private void UpdateIndexHint() =>
+        IndexHint = Indices.Count > 0
+            ? Localization.L("search.index.count", Indices.Count)
+            : Localization.L("search.index.empty");
 
     private void RaisePagingChanged()
     {

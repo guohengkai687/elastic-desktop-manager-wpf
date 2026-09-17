@@ -180,9 +180,28 @@ public class SqlViewModel : PageViewModelBase
         }
         Rows.ReplaceAll(rows);
 
+        UpdateSummaryText();
+        StructureChanged?.Invoke();
+    }
+
+    /// <summary>摘要由“耗时/行数/页码”词条拼成，是缓存值，语言切换必须重拼。</summary>
+    private void UpdateSummaryText()
+    {
+        if (_current is null)
+        {
+            SummaryText = "";
+            return;
+        }
+
         string cursorTip = _current.HasCursor ? " · cursor" : "";
         SummaryText = $"{Localization.L("sql.took")}: {_current.Took}ms  ·  {Localization.L("sql.rows", _totalRows)}{cursorTip}  ·  {PageInfoText}";
-        StructureChanged?.Invoke();
+    }
+
+    /// <summary>语言切换：页码是现读词条的（重发通知），摘要是拼好缓存的（重拼）。</summary>
+    protected override void OnRelocalize()
+    {
+        OnPropertyChanged(nameof(PageInfoText));
+        UpdateSummaryText();
     }
 
     private static string FormatCell(object? value)

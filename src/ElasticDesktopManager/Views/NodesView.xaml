@@ -18,33 +18,35 @@
             </Grid.ColumnDefinitions>
             <TextBlock x:Name="TitleText" Style="{StaticResource PageTitleStyle}" />
             <TextBlock Grid.Column="1" x:Name="SummaryText" VerticalAlignment="Center" Margin="16,0,0,0"
-                       FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+                       FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
+                       Text="{Binding Summary, Mode=OneWay}" />
             <TextBox Grid.Column="2" Width="220" VerticalContentAlignment="Center"
                      Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}" />
-            <Button Grid.Column="3" Margin="8,0,0,0" Style="{StaticResource IconButtonStyle}"
-                    Click="OnRefresh"  ToolTip="Refresh">
+            <Button x:Name="RefreshButton" Grid.Column="3" Margin="8,0,0,0" Style="{StaticResource IconButtonStyle}"
+                    Click="OnRefresh">
                         <Path Style="{StaticResource IconPathStyle}"
                               Data="{x:Static icons:AppIconGeometries.Refresh}"
                               Stroke="{DynamicResource TextSecondaryBrush}" />
                     </Button>
         </Grid>
 
-        <DataGrid x:Name="DataGrid" Grid.Row="1" ItemsSource="{Binding Nodes}" IsReadOnly="True" SelectionMode="Single"
+        <!-- 表头文案由 code-behind 按当前语言赋值（见 NodesView.xaml.cs 的 NodeHeaders） -->
+        <DataGrid x:Name="NodeGrid" Grid.Row="1" ItemsSource="{Binding Nodes}" IsReadOnly="True" SelectionMode="Single"
                   Visibility="{Binding HasConnection, Converter={StaticResource BoolToVisibility}}">
             <DataGrid.Columns>
-                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="150" />
-                <DataGridTextColumn Header="IP" Binding="{Binding Ip}" Width="130" />
-                <DataGridTextColumn Header="Port" Binding="{Binding Port}" Width="70" />
-                <DataGridTextColumn Header="Version" Binding="{Binding Version}" Width="90" />
-                <DataGridTextColumn Header="Role" Binding="{Binding NodeRole}" Width="110" />
-                <DataGridTextColumn Header="Master" Binding="{Binding Master}" Width="70" />
-                <DataGridTextColumn Header="CPU%" Binding="{Binding Cpu}" Width="70" />
-                <DataGridTextColumn Header="Heap%" Binding="{Binding HeapPercent}" Width="70" />
-                <DataGridTextColumn Header="RAM%" Binding="{Binding RamPercent}" Width="70" />
-                <DataGridTextColumn Header="Disk%" Binding="{Binding DiskUsedPercent}" Width="70" />
-                <DataGridTextColumn Header="Load" Binding="{Binding Load1m}" Width="70" />
-                <DataGridTextColumn Header="Uptime" Binding="{Binding Uptime}" Width="90" />
-                <DataGridTextColumn Header="JDK" Binding="{Binding Jdk}" Width="120" />
+                <DataGridTextColumn Binding="{Binding Name}" Width="150" />
+                <DataGridTextColumn Binding="{Binding Ip}" Width="130" />
+                <DataGridTextColumn Binding="{Binding Port}" Width="70" />
+                <DataGridTextColumn Binding="{Binding Version}" Width="90" />
+                <DataGridTextColumn Binding="{Binding NodeRole}" Width="110" />
+                <DataGridTextColumn Binding="{Binding Master}" Width="70" />
+                <DataGridTextColumn Binding="{Binding Cpu}" Width="70" />
+                <DataGridTextColumn Binding="{Binding HeapPercent}" Width="70" />
+                <DataGridTextColumn Binding="{Binding RamPercent}" Width="70" />
+                <DataGridTextColumn Binding="{Binding DiskUsedPercent}" Width="70" />
+                <DataGridTextColumn Binding="{Binding Load1m}" Width="70" />
+                <DataGridTextColumn Binding="{Binding Uptime}" Width="90" />
+                <DataGridTextColumn Binding="{Binding Jdk}" Width="120" />
             </DataGrid.Columns>
         </DataGrid>
 

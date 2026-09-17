@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Media.Animation;
+using ElasticDesktopManager.Core.I18n;
 using ElasticDesktopManager.Services;
 using ElasticDesktopManager.ViewModels;
 using ElasticDesktopManager.Views;
@@ -15,7 +16,19 @@ public partial class MainWindow : Window
         DataContext = new MainViewModel();
         Ui.Main = this;
 
+        LocalizeChrome();
+        // 主窗口是单例（不像弹窗每次新建都取当前语言），切语言时必须自己刷新，
+        // 否则右上角三个图标按钮的提示会一直是旧语言（视图与应用同生命周期，无需解绑）。
+        Localization.LanguageChanged += LocalizeChrome;
+
         Loaded += OnLoaded;
+    }
+
+    private void LocalizeChrome()
+    {
+        ThemeButton.ToolTip = Localization.L("setting.theme");
+        SettingsButton.ToolTip = Localization.L("nav.settings");
+        AboutButton.ToolTip = Localization.L("nav.about");
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)

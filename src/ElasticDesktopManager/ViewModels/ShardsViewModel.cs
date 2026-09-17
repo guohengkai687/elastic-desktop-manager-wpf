@@ -24,6 +24,11 @@ public class ShardsViewModel : PageViewModelBase
         private set => SetProperty(ref _stateCounts, value);
     }
 
+    private int _total;
+
+    /// <summary>是否成功加载过：没加载过就别在切语言时凭空显示"分片统计：0"。</summary>
+    private bool _hasData;
+
     public override Task ReloadAsync() => LoadAsync(busy: true, silent: false);
 
     /// <summary>进入页面时自动刷新：不占全局忙碌条、失败不弹模态框。</summary>
@@ -38,10 +43,21 @@ public class ShardsViewModel : PageViewModelBase
             var list = EsParsers.ParseShards(json);
             Shards.ReplaceAll(list);
 
-            Summary = $"{Localization.L("shard.summary")}：{list.Count}";
+            _total = list.Count;
+            _hasData = true;
+            UpdateSummary();
             var counts = list.GroupBy(x => x.State)
                 .Select(g => $"{g.Key}: {g.Count()}");
             StateCounts = string.Join("  ·  ", counts);
         }, busy, silent);
     }
+
+    /// <summary>分片总数在加载时数出来，语言切换必须按当前语言重拼。</summary>
+    private void UpdateSummary()
+    {
+        if (!_hasData) return;
+        Summary = Localization.L("shard.summary", _total);
+    }
+
+    protected override void OnRelocalize() => UpdateSummary();
 }

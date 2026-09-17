@@ -153,6 +153,9 @@ public class HealthViewModel : PageViewModelBase
         });
     }
 
+    /// <summary>语言切换：指标卡的标签是加载时拼好缓存的，必须按当前语言整批重建。</summary>
+    protected override void OnRelocalize() => ApplyHealth();
+
     private void ApplyEsInfo(string json)
     {
         using var doc = JsonDocument.Parse(json);

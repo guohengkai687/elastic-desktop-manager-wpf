@@ -1024,9 +1024,11 @@ static List<string> GridHeaderProblems(string xaml, string codeBehind)
     var maps = HeaderMapCounts(codeBehind);
     foreach (var (grid, columns) in grids)
     {
-        if (!grid.EndsWith("Grid", StringComparison.Ordinal))
+        // 注意 "Grid" 这个名字本身以 "Grid" 结尾：只查后缀会推出空的映射名（"Headers"），
+        // 报出来的错会指向"找不到映射"而不是真正的问题（名字里没有语义前缀），所以先挡掉。
+        if (grid.Length <= "Grid".Length || !grid.EndsWith("Grid", StringComparison.Ordinal))
         {
-            problems.Add($"{grid}：命名不符合 XxxGrid 约定，无法推出对应的表头映射数组");
+            problems.Add($"{grid}：命名不符合 XxxGrid 约定（如 IndexGrid / NodeGrid / ShardGrid），无法推出对应的表头映射数组");
             continue;
         }
         string expectedMap = grid[..^"Grid".Length] + "Headers";
@@ -1041,16 +1043,33 @@ static List<string> GridHeaderProblems(string xaml, string codeBehind)
     return problems;
 }
 
-Check("DataGrid：列数必须等于 code-behind 表头映射的项数（ApplyHeaders 越界是静默的）", () =>
+Check("DataGrid：每个表的列数必须等于 code-behind 表头映射的项数（越界是静默的，界面只会少表头）", () =>
 {
-    string xaml = Path.Combine(viewsDir, "SnapshotView.xaml");
-    string cs = Path.Combine(viewsDir, "SnapshotView.xaml.cs");
-    if (!File.Exists(xaml) || !File.Exists(cs))
-        throw new Exception("找不到 SnapshotView.xaml / SnapshotView.xaml.cs —— 本规则失去保护对象");
+    var problems = new List<string>();
+    var covered = new List<string>();
+    foreach (var xaml in Directory.GetFiles(viewsDir, "*.xaml").OrderBy(f => f, StringComparer.Ordinal))
+    {
+        string cs = xaml + ".cs";
+        if (!File.Exists(cs)) continue;
+        string label = Path.GetFileName(xaml);
+        // 只在"XAML 里显式列了列"的表上校验：SearchView/SqlView 的结果列是运行时按 ES 字段建的
+        var grids = DataGridColumnCounts(File.ReadAllText(xaml));
+        if (grids.Count == 0) continue;
 
-    var problems = GridHeaderProblems(File.ReadAllText(xaml), File.ReadAllText(cs));
+        problems.AddRange(GridHeaderProblems(File.ReadAllText(xaml), File.ReadAllText(cs))
+            .Select(p => $"{label}: {p}"));
+        covered.AddRange(grids.Keys.Select(g => $"{label}:{g}"));
+    }
+
+    // 规则不许空转：表的数量变了（改名/新增/删除）必须显式更新本条，否则它会悄悄少保护几张表
+    const int expected = 9;
+    if (covered.Count != expected)
+        throw new Exception($"扫描到 {covered.Count} 个显式列 DataGrid，规则期望 {expected} 个 —— 表结构变动后请更新本规则，别让它空转：\n    "
+            + string.Join("\n    ", covered));
+
     if (problems.Count > 0)
-        throw new Exception("快照页表头映射与列数不一致：\n    " + string.Join("\n    ", problems));
+        throw new Exception("表头映射与列数不一致（越界项会静默跳过，界面只是安静地少表头）：\n    "
+            + string.Join("\n    ", problems));
 });
 
 Check("守卫自检：DataGrid 列数与表头映射不一致必须能被抓出", () =>
@@ -1070,12 +1089,238 @@ Check("守卫自检：DataGrid 列数与表头映射不一致必须能被抓出"
         throw new Exception("未抓出缺失的表头映射数组");
     if (GridHeaderProblems($"<UserControl {xns}><Grid /></UserControl>", twoEntries).Count != 1)
         throw new Exception("一个 DataGrid 都没有时必须报错，而不是静默通过");
+    // 只叫 "Grid" 的表没有语义前缀，推向 "Headers" 会报成“找不到映射”；必须直接点出命名问题
+    string bare = $"<UserControl {xns}><DataGrid x:Name=\"Grid\"><DataGrid.Columns>"
+        + "<DataGridTextColumn /></DataGrid.Columns></DataGrid></UserControl>";
+    if (!GridHeaderProblems(bare, twoEntries).Single().Contains("命名不符合 XxxGrid 约定", StringComparison.Ordinal))
+        throw new Exception("未抓出没有语义前缀的表名（Grid 本身以 Grid 结尾，容易被误判成合规）");
     // 模板列也算一列（DataGridTemplateColumn 里面有 .CellTemplate 属性元素，别把子节点数错）
     string tpl = $"<UserControl {xns}><DataGrid x:Name=\"RepoGrid\"><DataGrid.Columns>"
         + "<DataGridTemplateColumn><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock /></DataTemplate>"
         + "</DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn></DataGrid.Columns></DataGrid></UserControl>";
     if (!GridHeaderProblems(tpl, twoEntries).Single().Contains("1 列", StringComparison.Ordinal))
         throw new Exception("模板列应计为 1 列（不能把 CellTemplate 里的子节点也算成列）");
+});
+
+// ---- 规则：XAML 里不许写死文案（Header / ToolTip）----
+//
+// 这两类属性的文案只允许有一个来源：code-behind 按当前语言赋值（表头映射数组 / Localize()）。
+// 写死在 XAML 里的值有两个害处：
+//   ① 它在 code-behind 执行之前就已经渲染过一帧（漏改时用户看到的就是这串写死的英文）；
+//   ② 它让"漏了本地化"看起来像"故意的"——第 6 轮 R18 就是这样漏掉 33 处表头的。
+// 注释里的示例文字不算（先剥注释再扫）。
+static string StripXmlComments(string xaml) =>
+    Regex.Replace(xaml, "<!--.*?-->", "", RegexOptions.Singleline);
+
+static List<string> HardcodedChromeLiterals(string xaml, string label)
+{
+    var problems = new List<string>();
+    foreach (Match m in Regex.Matches(StripXmlComments(xaml), @"\b(Header|ToolTip)\s*=\s*""([^""]*)"""))
+    {
+        string value = m.Groups[2].Value.Trim();
+        if (value.Length == 0) continue;
+        if (value.StartsWith("{", StringComparison.Ordinal)) continue;   // Binding / StaticResource / x:Static
+        problems.Add($"{label}: {m.Groups[1].Value}=\"{value}\"");
+    }
+    return problems;
+}
+
+Check("XAML：Header/ToolTip 不得写死文案（只能由 code-behind 按当前语言赋值）", () =>
+{
+    var problems = new List<string>();
+    int scanned = 0;
+    foreach (var xaml in Directory.GetFiles(viewsDir, "*.xaml"))
+    {
+        scanned++;
+        problems.AddRange(HardcodedChromeLiterals(File.ReadAllText(xaml), Path.GetFileName(xaml)));
+    }
+    string main = Path.Combine(repoRoot, "src", "ElasticDesktopManager", "MainWindow.xaml");
+    if (File.Exists(main))
+    {
+        scanned++;
+        problems.AddRange(HardcodedChromeLiterals(File.ReadAllText(main), "MainWindow.xaml"));
+    }
+
+    if (scanned == 0)
+        throw new Exception("没有扫描到任何 XAML —— 本规则失去保护对象，请更新规则");
+    if (problems.Count > 0)
+        throw new Exception($"发现 {problems.Count} 处写死的文案（切语言时不会跟着变）：\n    "
+            + string.Join("\n    ", problems));
+});
+
+Check("守卫自检：XAML 写死的 Header/ToolTip 必须能被抓出（绑定与注释不误报）", () =>
+{
+    if (HardcodedChromeLiterals("""<DataGridTextColumn Header="Name" />""", "t").Count != 1)
+        throw new Exception("未抓出写死的表头");
+    if (HardcodedChromeLiterals("""<Button ToolTip="Refresh" />""", "t").Count != 1)
+        throw new Exception("未抓出写死的 ToolTip");
+    if (HardcodedChromeLiterals("""<DataGridTextColumn Header="{Binding X}" />""", "t").Count != 0)
+        throw new Exception("误报：绑定表达式不是写死的文案");
+    if (HardcodedChromeLiterals("""<Button ToolTip="{x:Static local:Tip.X}" />""", "t").Count != 0)
+        throw new Exception("误报：x:Static 不是写死的文案");
+    if (HardcodedChromeLiterals("""<!-- 例：ToolTip="Refresh" 是错的 --><Button />""", "t").Count != 0)
+        throw new Exception("误报：注释里的示例不该算数");
+    if (HardcodedChromeLiterals("""<DataGridTextColumn Header="" />""", "t").Count != 0)
+        throw new Exception("误报：空表头（由 code-behind 赋值）不该算数");
+});
+
+// ---- 规则：译文不得当 key 再传一次 ----
+//
+// 第 7 轮在索引页发现：CreateConfirm / ShowJson 收的形参是**词条 key**（方法体内再 L() 一次），
+// 而调用点传的是 Localization.L("index.confirm.refresh") 的结果。L() 查不到就原样返回，
+// 于是中文界面看着完全正常、**英文界面弹框仍是中文**。既有规则只查"L(\"字面量\") 是不是词条"，
+// 这一层间接（key 传进去又被 L() 一次）它看不见，所以单独加一条。
+// 约定：形参名以 Key/key 结尾 ⇒ 收的是词条 key。
+
+/// <summary>按顶层逗号切参数列表；跳过字符串、跟踪 &lt;&gt; () [] {} 深度（泛型里的逗号不算分隔）。</summary>
+static List<string> SplitTopLevel(string text)
+{
+    var parts = new List<string>();
+    var current = new System.Text.StringBuilder();
+    int depth = 0;
+    for (int i = 0; i < text.Length; i++)
+    {
+        char c = text[i];
+        if (c == '"')
+        {
+            current.Append(c);
+            for (i++; i < text.Length && text[i] != '"'; i++)
+            {
+                if (text[i] == '\\' && i + 1 < text.Length) { current.Append(text[i]); i++; }
+                current.Append(text[i]);
+            }
+            if (i < text.Length) current.Append(text[i]);
+            continue;
+        }
+        if (c is '<' or '(' or '[' or '{') depth++;
+        else if (c is '>' or ')' or ']' or '}') depth--;
+        else if (c == ',' && depth == 0) { parts.Add(current.ToString()); current.Clear(); continue; }
+        current.Append(c);
+    }
+    if (current.Length > 0) parts.Add(current.ToString());
+    return parts;
+}
+
+/// <summary>`(形参表)` 的起止（用括号配对找，避免正则遇到 Func&lt;...&gt; 里的逗号就断）。</summary>
+static (string Params, int End) ParamListAt(string source, int openParen)
+{
+    int depth = 0;
+    for (int i = openParen; i < source.Length; i++)
+    {
+        if (source[i] == '(') depth++;
+        else if (source[i] == ')')
+        {
+            depth--;
+            if (depth == 0) return (source[(openParen + 1)..i], i);
+        }
+    }
+    return ("", openParen);
+}
+
+/// <summary>收集"形参名以 Key/key 结尾"的方法 → 第几个参数是 key。</summary>
+static Dictionary<string, HashSet<int>> KeyParamPositions(string source)
+{
+    var map = new Dictionary<string, HashSet<int>>(StringComparer.Ordinal);
+    foreach (Match m in Regex.Matches(source, @"\b(\w+)\s*\("))
+    {
+        string method = m.Groups[1].Value;
+        if (method is "if" or "for" or "while" or "switch" or "catch" or "using" or "lock" or "foreach") continue;
+        var (parameters, _) = ParamListAt(source, m.Index + m.Length - 1);
+        if (parameters.Length == 0 || parameters.Contains(';')) continue;
+
+        var parts = SplitTopLevel(parameters);
+        for (int i = 0; i < parts.Count; i++)
+        {
+            // 必须是"类型 名字"的形参写法（调用点的实参没有类型，天然被排除）
+            var pm = Regex.Match(parts[i].Trim(), @"^[\w<>,?\[\]\.\s]+?\s+(\w*[Kk]ey)$");
+            if (!pm.Success) continue;
+            if (!map.TryGetValue(method, out var set)) map[method] = set = new HashSet<int>();
+            set.Add(i);
+        }
+    }
+    return map;
+}
+
+static List<string> TranslationPassedAsKey(string source, string label, Dictionary<string, HashSet<int>> keyParams)
+{
+    var problems = new List<string>();
+    foreach (var (method, positions) in keyParams)
+    {
+        foreach (Match m in Regex.Matches(source, $@"(?<![\w.]){Regex.Escape(method)}\s*\("))
+        {
+            int open = m.Index + m.Length - 1;
+            var (parameters, _) = ParamListAt(source, open);
+            if (parameters.Length == 0) continue;
+            var args = SplitTopLevel(parameters);
+            foreach (int i in positions)
+            {
+                if (i >= args.Count) continue;
+                if (args[i].TrimStart().StartsWith("Localization.L(", StringComparison.Ordinal))
+                    problems.Add($"{label}: {method}(...) 第 {i + 1} 个实参是 L(...) 的结果，但形参是 key —— 会再查一次词条，查不到就原样返回（英文界面里仍是中文）");
+            }
+        }
+    }
+    return problems;
+}
+
+Check("i18n：形参是 key 的方法，调用点不得传 Localization.L(...) 的结果（译文当 key 会双重翻译）", () =>
+{
+    string root = Path.Combine(repoRoot, "src");
+    var files = Directory.GetFiles(root, "*.cs", SearchOption.AllDirectories)
+        .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
+                    && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
+        .OrderBy(f => f, StringComparer.Ordinal)
+        .ToList();
+
+    // 先全局收集声明（调用点可能和声明不在同一个文件），再逐文件查调用点。
+    // 同名不同签名的巧合会带来少量误报，但误报是显式的、可复核的；漏报才是这条规则要防的。
+    var keyParams = new Dictionary<string, HashSet<int>>(StringComparer.Ordinal);
+    foreach (var f in files)
+        foreach (var (method, positions) in KeyParamPositions(File.ReadAllText(f)))
+        {
+            if (!keyParams.TryGetValue(method, out var set)) keyParams[method] = set = new HashSet<int>();
+            set.UnionWith(positions);
+        }
+
+    if (keyParams.Count == 0)
+        throw new Exception("没有解析到任何以 Key 结尾的形参 —— 本规则失去保护对象，请更新规则");
+
+    var problems = new List<string>();
+    foreach (var f in files)
+        problems.AddRange(TranslationPassedAsKey(File.ReadAllText(f),
+            Path.GetRelativePath(repoRoot, f), keyParams));
+
+    if (problems.Count > 0)
+        throw new Exception("发现把译文当 key 传回的调用点：\n    " + string.Join("\n    ", problems.Distinct()));
+});
+
+Check("守卫自检：译文当 key 传必须能被抓出（正确写法/变量/泛型逗号都不误报）", () =>
+{
+    var bug = KeyParamPositions("""private ICommand Create(string confirmKey, object act) => null;""");
+    if (!bug.ContainsKey("Create") || !bug["Create"].Contains(0))
+        throw new Exception("未识别以 Key 结尾的形参");
+    if (TranslationPassedAsKey("""Create(Localization.L("index.confirm.flush"), act);""", "t", bug).Count != 1)
+        throw new Exception("未抓出把 L() 结果当 key 传的调用点");
+    if (TranslationPassedAsKey("""Create("index.confirm.flush", act);""", "t", bug).Count != 0)
+        throw new Exception("误报：直接传 key 字面量是正确的");
+    if (TranslationPassedAsKey("""Create(confirmKey, act);""", "t", bug).Count != 0)
+        throw new Exception("误报：传变量不该被判定为译文");
+    if (TranslationPassedAsKey("""Ui.Toast(Localization.L("common.ok"));""", "t", bug).Count != 0)
+        throw new Exception("误报：Toast 的形参不是 key");
+
+    // 泛型里的逗号不能把形参下标算错（否则 key 参数会被漏掉/错位）
+    var generic = KeyParamPositions("""private void Send(Func<int, int> map, string titleKey) { }""");
+    if (!generic.TryGetValue("Send", out var pos) || !pos.Contains(1))
+        throw new Exception("泛型带来的逗号把形参下标算错了（key 参数应仍在下标 1）");
+    if (TranslationPassedAsKey("""Send(x, Localization.L("a.b"));""", "t", generic).Count != 1)
+        throw new Exception("未抓出泛型形参之后的 key 参数被传译文");
+
+    // 实参里带 lambda（内含逗号与括号）时不能把实参切错
+    var lambda = KeyParamPositions("""private void Confirm(string confirmKey, Func<int, int, int> act) { }""");
+    if (TranslationPassedAsKey("""Confirm(Localization.L("a.b"), (c, i) => c.X(i.Name, CancellationToken.None));""", "t", lambda).Count != 1)
+        throw new Exception("实参含 lambda 时应仍能抓出第 1 个实参的译文");
+    if (TranslationPassedAsKey("""Confirm("a.b", (c, i) => c.X(i.Name, CancellationToken.None));""", "t", lambda).Count != 0)
+        throw new Exception("误报：lambda 里的逗号不该被当成实参分隔符");
 });
 
 // ---- 规则：页面视图在 code-behind 里赋本地化文案时，必须订阅 LanguageChanged ----
@@ -1095,18 +1340,10 @@ static bool LocalizesChromeInCodeBehind(string cs) =>
 /// <summary>
 /// 已知"在 code-behind 里本地化但没订阅语言切换"的页面视图 —— 历史遗留，待统一修。
 /// 这是一份**只允许缩短**的债务清单：修好一个就删一条，否则下面的规则会报错。
+/// 第 7 轮已把 8 个缓存页面全部修完（EmptyState/Health/Indices/Metrics/Nodes/Rest/Shards/Sql），
+/// 现在为空；留空数组是为了保留"要么零债务、要么显式承认"的棘轮机制，不要删掉这个函数。
 /// </summary>
-static string[] KnownStalePageLocalizers() => new[]
-{
-    "EmptyStateView.xaml.cs",
-    "HealthView.xaml.cs",
-    "IndicesView.xaml.cs",
-    "MetricsView.xaml.cs",
-    "NodesView.xaml.cs",
-    "RestView.xaml.cs",
-    "ShardsView.xaml.cs",
-    "SqlView.xaml.cs",
-};
+static string[] KnownStalePageLocalizers() => Array.Empty<string>();
 
 /// <summary>
 /// 判定一个视图：n/a=不适用（弹窗 / 没在 code-behind 里本地化）；
@@ -1150,6 +1387,59 @@ Check("i18n：页面视图在 code-behind 里本地化时必须订阅 LanguageCh
     foreach (var fixedFile in subscribed)
         if (allowlist.Contains(fixedFile, StringComparer.Ordinal))
             throw new Exception($"{fixedFile} 已订阅 LanguageChanged，请把它从 KnownStalePageLocalizers 白名单里删除");
+});
+
+// ---- 规则：订阅了语言切换的页面视图必须同时让 VM 重算它自己缓存的文案 ----
+//
+// 视图只刷得动自己 x:Name 元素上的 chrome；“共 N 条 / 第 N 页 / 指标卡标签 / 分组标题”
+// 这类在加载时拼好、之后不再重算的字符串活在 VM 里。视图订阅了却不叫 VM 重算，
+// 切完语言就是“标题变了、统计还是旧语言”的中英混排 —— 第 7 轮修之前 8 个页面都是这个状态。
+static bool SubscribesLanguageChanged(string cs) =>
+    cs.Contains("LanguageChanged +=", StringComparison.Ordinal);
+
+/// <summary>判定一个视图：n/a=弹窗或没订阅；ok=订阅了并且叫了 VM 重算；missing=该叫没叫。</summary>
+static string PageRelocalizeVerdict(string xaml, string cs)
+{
+    if (!RootIsUserControl(xaml)) return "n/a";            // 弹窗每次新建，构造时即当前语言
+    if (!SubscribesLanguageChanged(cs)) return "n/a";      // 没订阅语言切换，这里不管
+    return cs.Contains("Relocalize(", StringComparison.Ordinal) ? "ok" : "missing";
+}
+
+Check("i18n：订阅语言切换的页面视图必须调用 VM 的 Relocalize()（否则统计/页码停在旧语言）", () =>
+{
+    var problems = new List<string>();
+    int scanned = 0;
+    foreach (var xaml in Directory.GetFiles(viewsDir, "*.xaml"))
+    {
+        string cs = xaml + ".cs";
+        if (!File.Exists(cs)) continue;
+        if (PageRelocalizeVerdict(File.ReadAllText(xaml), File.ReadAllText(cs)) == "n/a") continue;
+        scanned++;
+        if (PageRelocalizeVerdict(File.ReadAllText(xaml), File.ReadAllText(cs)) == "missing")
+            problems.Add(Path.GetFileName(cs));
+    }
+
+    if (scanned == 0)
+        throw new Exception("没有扫描到任何订阅语言切换的页面视图 —— 本规则失去保护对象，请更新规则");
+    if (problems.Count > 0)
+        throw new Exception("这些页面视图订阅了 LanguageChanged，却没让 VM 重算缓存文案（调 PageViewModelBase.Relocalize）：\n    "
+            + string.Join("\n    ", problems));
+});
+
+Check("守卫自检：订阅了语言切换但没叫 VM 重算缓存文案必须能被抓出", () =>
+{
+    const string uc = "<UserControl x:Class=\"X\">";
+    const string win = "<Window x:Class=\"X\">";
+    string subscribed = """Localization.LanguageChanged += OnLanguageChanged;""";
+
+    if (PageRelocalizeVerdict(uc, subscribed + """TitleText.Text = Localization.L("nav.home");""") != "missing")
+        throw new Exception("未抓出“订阅了语言切换却没调 Relocalize”的页面视图");
+    if (PageRelocalizeVerdict(uc, subscribed + """(DataContext as PageViewModelBase)?.Relocalize();""") != "ok")
+        throw new Exception("误报：订阅了并且调了 Relocalize 的页面视图应当通过");
+    if (PageRelocalizeVerdict(win, subscribed) != "n/a")
+        throw new Exception("误报：弹窗（Window 根）不应被要求");
+    if (PageRelocalizeVerdict(uc, """TitleText.Text = Localization.L("nav.home");""") != "n/a")
+        throw new Exception("误报：没订阅语言切换的视图不该被这条规则管");
 });
 
 Check("守卫自检：页面视图漏订阅 LanguageChanged 必须能被抓出（弹窗不误报）", () =>

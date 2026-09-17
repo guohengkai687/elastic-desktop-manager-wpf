@@ -127,6 +127,7 @@ public static class Localization
         ["index.table.memory"] = "内存",
         ["index.table.time"] = "创建时间",
         ["index.table.action"] = "操作",
+        ["index.total"] = "总数：{0}",
         ["index.search"] = "查询",
         ["index.detail"] = "索引详情",
         ["index.stats"] = "索引状态",
@@ -156,7 +157,7 @@ public static class Localization
         ["node.table.load"] = "负载1m",
         ["node.table.uptime"] = "运行时间",
         ["node.table.jdk"] = "JDK",
-        ["node.summary"] = "节点统计",
+        ["node.summary"] = "节点统计：{0}",
 
         // 分片
         ["shard.table.index"] = "索引",
@@ -167,7 +168,7 @@ public static class Localization
         ["shard.table.store"] = "存储",
         ["shard.table.ip"] = "IP",
         ["shard.table.node"] = "节点",
-        ["shard.summary"] = "分片统计",
+        ["shard.summary"] = "分片统计：{0}",
         ["shard.state.healthy"] = "健康",
 
         // REST
@@ -380,7 +381,7 @@ public static class Localization
         ["common.cancel"] = "取消",
 
         // ---- 指标页 ----
-        ["metrics.summary"] = "指标总数",
+        ["metrics.summary"] = "指标总数：{0}",
         ["metrics.group.cluster"] = "集群",
         ["metrics.group.nodes"] = "节点",
         ["metrics.group.indices"] = "索引",
@@ -637,6 +638,7 @@ public static class Localization
         ["index.table.memory"] = "Memory",
         ["index.table.time"] = "Created",
         ["index.table.action"] = "Actions",
+        ["index.total"] = "Total: {0}",
         ["index.search"] = "Search",
         ["index.detail"] = "Index details",
         ["index.stats"] = "Index stats",
@@ -665,7 +667,7 @@ public static class Localization
         ["node.table.load"] = "Load 1m",
         ["node.table.uptime"] = "Uptime",
         ["node.table.jdk"] = "JDK",
-        ["node.summary"] = "Node summary",
+        ["node.summary"] = "Node summary: {0}",
 
         ["shard.table.index"] = "Index",
         ["shard.table.shard"] = "Shard",
@@ -675,7 +677,7 @@ public static class Localization
         ["shard.table.store"] = "Store",
         ["shard.table.ip"] = "IP",
         ["shard.table.node"] = "Node",
-        ["shard.summary"] = "Shard summary",
+        ["shard.summary"] = "Shard summary: {0}",
         ["shard.state.healthy"] = "Healthy",
 
         ["rest.method"] = "Method",
@@ -882,7 +884,7 @@ public static class Localization
         ["common.cancel"] = "Cancel",
 
         // ---- Metrics ----
-        ["metrics.summary"] = "Total metrics",
+        ["metrics.summary"] = "Total metrics: {0}",
         ["metrics.group.cluster"] = "Cluster",
         ["metrics.group.nodes"] = "Nodes",
         ["metrics.group.indices"] = "Indices",

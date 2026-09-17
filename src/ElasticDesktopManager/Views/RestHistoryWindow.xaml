@@ -17,13 +17,13 @@
         </StackPanel>
 
         <Grid Grid.Row="1">
-            <DataGrid x:Name="Grid" ItemsSource="{Binding Items}" IsReadOnly="True" AutoGenerateColumns="False"
+            <DataGrid x:Name="HistoryGrid" ItemsSource="{Binding Items}" IsReadOnly="True" AutoGenerateColumns="False"
                       SelectionMode="Single" MouseDoubleClick="OnRowDoubleClick"
                       SelectionChanged="OnSelectionChanged">
                 <DataGrid.Columns>
-                    <DataGridTextColumn Header="Method" Binding="{Binding Method}" Width="80" />
-                    <DataGridTextColumn Header="Path" Binding="{Binding Command}" Width="*" />
-                    <DataGridTextColumn Header="Time" Binding="{Binding CreateTime}" Width="160" />
+                    <DataGridTextColumn Binding="{Binding Method}" Width="80" />
+                    <DataGridTextColumn Binding="{Binding Command}" Width="*" />
+                    <DataGridTextColumn Binding="{Binding CreateTime}" Width="160" />
                 </DataGrid.Columns>
             </DataGrid>
             <TextBlock x:Name="EmptyHint" HorizontalAlignment="Center" VerticalAlignment="Center"

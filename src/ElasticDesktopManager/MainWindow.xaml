@@ -70,20 +70,20 @@
                     </StackPanel>
                 </Button>
 
-                <Button Grid.Column="3" Style="{StaticResource IconButtonStyle}" Margin="8,0,0,0"
-                        ToolTip="Theme" Command="{Binding ToggleThemeCommand}">
+                <Button x:Name="ThemeButton" Grid.Column="3" Style="{StaticResource IconButtonStyle}" Margin="8,0,0,0"
+                        Command="{Binding ToggleThemeCommand}">
                     <Path Style="{StaticResource IconPathStyle}"
                           Data="{x:Static icons:AppIconGeometries.Theme}"
                           Stroke="{DynamicResource TextSecondaryBrush}" />
                 </Button>
-                <Button Grid.Column="4" Style="{StaticResource IconButtonStyle}"
-                        ToolTip="Settings" Command="{Binding OpenSettingsCommand}">
+                <Button x:Name="SettingsButton" Grid.Column="4" Style="{StaticResource IconButtonStyle}"
+                        Command="{Binding OpenSettingsCommand}">
                     <Path Style="{StaticResource IconPathStyle}"
                           Data="{x:Static icons:AppIconGeometries.Settings}"
                           Stroke="{DynamicResource TextSecondaryBrush}" />
                 </Button>
-                <Button Grid.Column="5" Style="{StaticResource IconButtonStyle}"
-                        ToolTip="About" Command="{Binding OpenAboutCommand}">
+                <Button x:Name="AboutButton" Grid.Column="5" Style="{StaticResource IconButtonStyle}"
+                        Command="{Binding OpenAboutCommand}">
                     <Path Style="{StaticResource IconPathStyle}"
                           Data="{x:Static icons:AppIconGeometries.About}"
                           Stroke="{DynamicResource TextSecondaryBrush}" />

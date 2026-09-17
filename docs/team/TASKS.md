@@ -231,12 +231,52 @@
 
 ### 未做（如实声明）
 
-- [ ] **8 个缓存页面视图不随语言切换**（首页/节点/分片/索引/指标/REST/SQL/空态视图）：
-      它们在 code-behind 里赋本地化文案但没订阅 `Localization.LanguageChanged`，
-      `MainViewModel.OnLanguageChanged` 只刷新导航标题 → 切语言后 chrome 停在旧语言（中英混排）。
-      已由守卫规则 + 只允许缩短的债务清单（`KnownStalePageLocalizers`）兜住，**新增页面不会再犯**；
-      待一个批次统一修（每个文件：把 code-behind 本地化抽成方法 + 构造时订阅）。
-- [ ] **31 个 DataGrid 列头硬编码英文**（NodesView 13 / ShardsView 8 / IndicesView 7 / RestHistoryWindow 3），
-      不走 i18n → 中文界面中英混排。属独立 i18n 债务，待批次处理。
-- [ ] 真机复验仍需用户在 Windows 上完成：QA.md 第 15-19 条（第 4 轮）、20-24 条（第 5 轮）、**25-29 条（本轮）**。
+- [x] ~~**8 个缓存页面视图不随语言切换**（首页/节点/分片/索引/指标/REST/SQL/空态视图）~~ → **第 7 轮已修**（见下）
+- [x] ~~**31 个 DataGrid 列头硬编码英文**~~ → **第 7 轮已修**，并**更正了本条描述的错误**（见下）
+- [ ] 真机复验仍需用户在 Windows 上完成：QA.md 第 15-19 条（第 4 轮）、20-24 条（第 5 轮）、**25-29 条（第 6 轮）**。
 - [ ] 深分页（from 很大）的服务端开销是 ES 自身性质：本实现只做上限提示，未引入 PIT/`search_after` 游标翻页。
+
+---
+
+## 第 7 轮（语言切换收尾：8 个缓存页面 + 文案唯一来源）
+
+用户指令："接着把那 8 个页面的语言切换"。即第 6 轮登记的那批 i18n 债务。
+
+### 已完成
+
+- [x] **责任划分定案（ADR-14）**：订阅点只放在**视图**侧，VM 不挂静态事件
+      （`IndexToolsViewModel` 每次开窗都新建，写在基类构造里会让静态事件把已关闭的窗口永久持有）；
+      `PageViewModelBase` 新增 public `Relocalize()` + `protected virtual OnRelocalize()`
+- [x] **8 个页面视图全部修完**：`EmptyStateView`/`HealthView`/`IndicesView`/`MetricsView`/`NodesView`/`RestView`/`ShardsView`/`SqlView`
+      —— 抽出 `Localize()`、构造时订阅 `LanguageChanged`、处理器里 `Localize() + VM.Relocalize()`
+- [x] **VM 侧缓存文案统一重算**：指标卡标签、节点/分片/指标摘要、索引总数与页码、SQL 摘要与页码、
+      搜索页索引下拉提示（`IndexHint`，第 6 轮漏掉的）、快照页五条状态行（改为覆写 `OnRelocalize`）
+- [x] `KnownStalePageLocalizers` **债务清单清零**（棘轮机制保留：以后新增页面再犯直接报错）
+- [x] **文案唯一来源**：XAML 清掉 33 处写死的 `Header=`、7 处写死的 `ToolTip=`；
+      `StringFormat=Total: {0}` 改为词条 `index.total`（中英界面都显示 `Total:` 的真实缺陷）
+- [x] 表命名统一为 `XxxGrid`/`XxxHeaders`，让"列数 ↔ 表头映射"规则覆盖**全部 9 张表**（原先只保护 SnapshotView）
+- [x] **修掉索引页 7 处双重翻译**（`CreateConfirm`/`ShowJson` 收 key 却传了 `L()` 的结果）：
+      中文界面看着正常，**英文界面确认框/JSON 窗标题仍是中文**
+- [x] 顺带修：`NodesView`/`ShardsView` 的 `SummaryText` 从未绑定（"节点统计：N"从未显示过）；
+      `HealthView`/`IndicesView`/`NodesView`/`ShardsView` 的刷新按钮提示；`MainWindow` 三个图标提示；
+      `RestHistoryWindow` 的 `Method` 列
+- [x] 守卫 **23 → 29 项**（3 条新规则 + 3 条自检）+ 修掉一处守卫自身的判据缺陷
+      （`x:Name="Grid"` 也以 `Grid` 结尾，会报成"找不到 Headers"而不是命名问题）
+- [x] 测试 105/105、构建 0 警告 0 错误；**负向验证 7 条**全部按预期精准报错
+- [x] 文档更新（ARCHITECTURE ADR-14 + R21-R23 / QA 第 7 轮 + 核对清单 30-36 + 更正旧描述 / 本文件 / README）
+
+### 更正上一轮的描述错误（如实记录）
+
+第 6 轮 QA/TASKS 写的"31 个 DataGrid 列头硬编码英文 → 中文界面中英混排"**部分是错的**：
+`NodesView`/`ShardsView`/`IndicesView` 的表头在 `Loaded` 时已按词条赋成中文，中文界面本来就是中文，
+XAML 里的英文只是被覆盖的占位（性质是"两处来源"，不是"界面上有英文"）。计数也应为 **33 处**
+（13+8+9+3）。真正用户可见的英文是：4 处 `ToolTip="Refresh"`、`MainWindow` 3 个提示、
+`RestHistoryWindow` 的 `Method` 列、`IndicesView` 的 `StringFormat=Total:` —— 均已在第 7 轮修复。
+
+### 未做（如实声明）
+
+- [ ] 真机复验仍需用户在 Windows 上完成：**QA.md 第 30-36 条（本轮）**以及 15-19、20-24、25-29 条。
+- [ ] `PageViewModelBase` 的"子类漏算某个缓存属性"守不住：守卫只强制"视图调了 `Relocalize()`"，
+      新增一个加载时拼好的 VM 文案必须人工记得写进 `OnRelocalize()`（已记入 ADR-14 的纪律条款）。
+- [ ] 解析时格式化的 ES 文本（保留/统计/分片，缓存在模型上）仍需下次刷新才更新（ADR-10 的既有代价）。
+- [ ] 深分页、ILM/SLM 调度器状态、非 fs 仓库设置表单：同第 6 轮，未做。

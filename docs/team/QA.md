@@ -5,6 +5,9 @@
 
 ## 执行汇总
 
+> 下表是**第 3 轮（ES-King 借鉴改造）当时的快照**，保留不变。**最新数字见各轮小节**：
+> 第 4-6 轮见下文，第 7 轮为 `build 0/0 · 单测 105/105 · 守卫 29/29`。
+
 | 命令 | 结果 |
 |---|---|
 | `dotnet build ElasticDesktopManager.sln` | **Build succeeded，0 Warning(s)，0 Error(s)** |
@@ -363,3 +366,62 @@ DataGrid 列对齐、以及两条规则的自保护（模板改名 / 找不到�
     且"下一页"仍可用。
 29. **语言切换（顺带）**：在设置里中↔英切换，**搜索页**（含新的分页条文案与每页条数下拉）应整体切换；
     其余页面已知会停在旧语言 —— 这是下一个待修批次，见 TASKS.md。
+
+> **第 7 轮更正（如实记录）**：本节上方的"本轮顺带发现的系统性问题"里那条
+> "31 个 DataGrid 列头硬编码英文 → 中文界面会中英混排"**部分是错的**。逐文件核实后：`NodesView`/`ShardsView`/`IndicesView` 的表头在 `Loaded` 时就已由
+> code-behind 的 `HeaderMap` 按词条赋成中文，中文界面里**本来就是中文**，XAML 里的英文只是被覆盖的占位
+> （问题性质是"两处来源"，不是"界面上有英文"）。真正**用户可见**的英文是另外 4 类：
+> ① `HealthView`/`IndicesView`/`NodesView`/`ShardsView` 的 `ToolTip="Refresh"`（从未被本地化）；
+> ② `MainWindow` 三个图标按钮的提示（Theme/Settings/About）；③ `RestHistoryWindow` 的 `Method` 列
+> （code-behind 里直接赋英文字面量）；④ `IndicesView` 的 `StringFormat=Total: {0}`（中英界面都显示 `Total:`）。
+> 计数也修正为 **33 处**字面量 `Header=`（13+8+9+3，IndicesView 含 2 个模板列）。以上全部已在第 7 轮修复。
+
+---
+
+## 第 7 轮（语言切换收尾：8 个缓存页面 + 文案唯一来源）
+
+### 用户需求
+
+"接着把那 8 个页面的语言切换" —— 第 6 轮如实登记、未修的批次：首页 / 节点 / 分片 / 索引 / 指标 /
+REST / SQL / 空态视图在 code-behind 里赋了本地化文案，却没订阅 `Localization.LanguageChanged`，
+于是从设置窗切语言后整页 chrome 停在旧语言，而 VM 的动态文案已切新语言 → 中英混排。
+
+### 实现清单
+
+| 层 | 改动 |
+|---|---|
+| 责任划分 | **订阅只在视图**，VM 不挂静态事件（`IndexToolsViewModel` 每次开窗都新建，订阅会越开越漏）；`PageViewModelBase` 新增 public `Relocalize()`（重发空态文案通知）+ `protected virtual OnRelocalize()` |
+| 8 个视图 | 抽出 `Localize()`，构造时订阅 `LanguageChanged`，处理器里 `Localize() + (DataContext as PageViewModelBase)?.Relocalize()`；`HealthView` 把"本地化"与"启停轮询"拆开 |
+| VM 缓存文案 | `HealthViewModel`（指标卡标签整批重建）、`NodesViewModel`/`ShardsViewModel`/`MetricsViewModel`（"节点统计：N"这类加载时拼好的摘要）、`IndicesViewModel`（总数/页码）、`SqlViewModel`（摘要/页码）、`SearchViewModel`（补上索引下拉提示 `IndexHint`）、`SnapshotViewModel`（从"自己订阅"改为覆写 `OnRelocalize`） |
+| 文案唯一来源 | XAML 里 33 处写死的 `Header=`、7 处写死的 `ToolTip=` 全部清掉，改为 code-behind 按当前语言赋值；`StringFormat=Total: {0}` 改为词条 `index.total` |
+| 表命名 | `DataGrid` → `IndexGrid`/`NodeGrid`/`ShardGrid`，`Grid` → `HistoryGrid`，映射数组统一为 `XxxHeaders`，让"列数↔表头映射"规则能覆盖全部 9 张表 |
+| 顺带修的真实缺陷 | 索引页 7 处**双重翻译**：`CreateConfirm`/`ShowJson` 的形参收的是词条 key（方法体内再 `L()` 一次），调用点却传了 `Localization.L(...)` 的结果 → `L()` 查不到就原样返回，**英文界面里这些确认框/JSON 窗标题仍是中文**（中文界面看着完全正常，所以一直没被发现） |
+| 顺带修 | `NodesView`/`ShardsView` 的 `SummaryText` 悬空：VM 算了 `Summary` 但 TextBlock 从未绑定 → "节点统计：N"从未显示过；`HealthView` 刷新按钮的 `ToolTip="Refresh"`；`MainWindow` 三个图标按钮提示；`RestHistoryWindow` 的 `Method` 列 |
+
+### 本轮验证
+
+- 构建：**0 警告 0 错误**
+- Core 单测：**105/105**（本轮逻辑不在 Core，词条改动由守卫的 zh/en 对齐 + 占位符一致性覆盖）
+- 静态守卫：**23 → 29/29**（新增 3 条规则 + 3 条自检；自检总数 7 → 10）
+- **负向验证 7 条**（改坏生产代码 → 确认只有预期那一条失败且信息精准 → 还原 → 复跑全绿）：
+  ① 表头映射少一项；② XAML 写死表头；③ 把 `L()` 结果当 key 传；④ 订阅了却不调 `Relocalize()`；
+  ⑤ 债务清单修好却不删条目；⑥ 表名不符合 `XxxGrid` 约定；⑦ 表少一张（规则不许空转缩小覆盖面）。
+- 顺带发现并修掉一处守卫缺陷：`x:Name="Grid"` 也以 `Grid` 结尾，旧判据会推出空映射名 `Headers`，
+  报错指向"找不到映射"而不是真正的命名问题（已挡掉并补自检）。
+
+### 追加到 Windows 人工核对清单
+
+30. **主功能（本轮）**：连上集群后打开设置，中 → 英切换，然后**逐个翻一遍**这 8 个页面，
+    整页文案（标题/表头/按钮/提示）应全部是英文，**不应有中文残留**；再切回中文应恢复。
+    重点：首页的 9 张指标卡标签、节点页/分片页的"Node summary: N"/"Shard summary: N"、
+    指标页的分组标题与"Total metrics: N"、索引页的"Total: N"与"Page N / M"、
+    SQL 页的摘要行（耗时/行数/页码）、首页/节点/分片/索引页右上角刷新按钮的悬停提示。
+31. **空态文案**：断开连接（或未连接状态）下切语言 → 各页面中间的空态标题/提示应跟着切。
+32. **索引页确认框（双重翻译的回归点）**：切到英文后，在索引页用行尾"⋯"菜单执行
+    "刷新索引/Flush/清缓存/打开/关闭"，确认弹框内容应是**英文**（修复前是中文）；
+    双击"索引详情/索引状态"打开的 JSON 窗标题也应是英文。
+33. **索引页总数**：中文界面应显示"总数：N"、英文界面"Total: N"（修复前两种语言都显示 `Total: N`）。
+34. **REST 历史窗**：中文界面下打开"历史记录"窗，第一列表头应是"方法"（修复前是 `Method`）。
+35. **主窗口提示**：右上角三个图标按钮（主题/设置/关于）的悬停提示应随语言切换。
+36. **表头不应为空**：本轮把 33 处写死的表头改成"由 code-behind 赋值"，
+    请确认索引/节点/分片/REST 历史窗的表头**都有字**（若出现空表头，说明 `Localized` 没跑到或列数对不上）。

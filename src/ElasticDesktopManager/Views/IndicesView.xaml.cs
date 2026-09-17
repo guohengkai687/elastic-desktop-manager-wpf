@@ -8,7 +8,11 @@ namespace ElasticDesktopManager.Views;
 
 public partial class IndicesView : UserControl
 {
-    private static readonly (int Index, string Key)[] HeaderMap =
+    /// <summary>
+    /// 表头按下标对齐 XAML 的列顺序。XAML 里**不写**表头文案（只留列），
+    /// 否则一处改语言、一处写死英文，迟早对不上；列数一致性由守卫规则核对。
+    /// </summary>
+    private static readonly (int Index, string Key)[] IndexHeaders =
     {
         (0, "index.table.name"), (1, "index.table.health"), (2, "index.table.status"), (3, "index.table.shard"),
         (4, "index.table.docs"), (5, "index.table.store"), (6, "index.table.memory"), (7, "index.table.time"),
@@ -18,15 +22,27 @@ public partial class IndicesView : UserControl
     public IndicesView()
     {
         InitializeComponent();
-        Loaded += (_, _) =>
-        {
-            TitleText.Text = Localization.L("nav.indices");
-            PrevButton.Content = "‹ " + Localization.L("sql.prevPage");
-            NextButton.Content = Localization.L("sql.nextPage") + " ›";
-            foreach (var (idx, key) in HeaderMap)
-                if (idx < DataGrid.Columns.Count)
-                    DataGrid.Columns[idx].Header = Localization.L(key);
-        };
+        Loaded += (_, _) => Localize();
+        // 页面被 MainViewModel 缓存、切语言时不会重新 Loaded，必须显式订阅
+        // （视图与应用同生命周期，无需解绑）。
+        Localization.LanguageChanged += OnLanguageChanged;
+    }
+
+    private void OnLanguageChanged()
+    {
+        Localize();
+        (DataContext as PageViewModelBase)?.Relocalize();   // “总数：N” / “第 N 页” 是 VM 拼的
+    }
+
+    private void Localize()
+    {
+        TitleText.Text = Localization.L("nav.indices");
+        PrevButton.Content = "‹ " + Localization.L("sql.prevPage");
+        NextButton.Content = Localization.L("sql.nextPage") + " ›";
+        RefreshButton.ToolTip = Localization.L("common.refresh");
+        foreach (var (idx, key) in IndexHeaders)
+            if (idx < IndexGrid.Columns.Count)
+                IndexGrid.Columns[idx].Header = Localization.L(key);
     }
 
     private void OnRefresh(object sender, RoutedEventArgs e)

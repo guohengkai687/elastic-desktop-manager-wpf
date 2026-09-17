@@ -21,7 +21,7 @@
                        FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
             <TextBox Grid.Column="2" Width="240" VerticalContentAlignment="Center"
                      Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}" />
-            <Button Grid.Column="3" Margin="8,0,0,0" Style="{StaticResource IconButtonStyle}"
+            <Button x:Name="RefreshButton" Grid.Column="3" Margin="8,0,0,0" Style="{StaticResource IconButtonStyle}"
                     Click="OnRefresh">
                         <Path Style="{StaticResource IconPathStyle}"
                               Data="{x:Static icons:AppIconGeometries.Refresh}"

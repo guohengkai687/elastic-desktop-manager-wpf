@@ -18,29 +18,30 @@
             </Grid.ColumnDefinitions>
             <TextBlock x:Name="TitleText" Style="{StaticResource PageTitleStyle}" />
             <TextBlock Grid.Column="1" x:Name="SummaryText" VerticalAlignment="Center" Margin="16,0,0,0"
-                       FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" />
+                       FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
+                       Text="{Binding Summary, Mode=OneWay}" />
             <TextBlock Grid.Column="2" x:Name="StateCountsText" VerticalAlignment="Center" Margin="16,0,0,0"
                        FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
                        Text="{Binding StateCounts, Mode=OneWay}" />
-            <Button Grid.Column="3" Style="{StaticResource IconButtonStyle}" Click="OnRefresh" 
-                    ToolTip="Refresh">
+            <Button x:Name="RefreshButton" Grid.Column="3" Style="{StaticResource IconButtonStyle}" Click="OnRefresh">
                         <Path Style="{StaticResource IconPathStyle}"
                               Data="{x:Static icons:AppIconGeometries.Refresh}"
                               Stroke="{DynamicResource TextSecondaryBrush}" />
                     </Button>
         </Grid>
 
-        <DataGrid x:Name="DataGrid" Grid.Row="1" ItemsSource="{Binding Shards}" IsReadOnly="True"
+        <!-- 表头文案由 code-behind 按当前语言赋值（见 ShardsView.xaml.cs 的 ShardHeaders） -->
+        <DataGrid x:Name="ShardGrid" Grid.Row="1" ItemsSource="{Binding Shards}" IsReadOnly="True"
                   Visibility="{Binding HasConnection, Converter={StaticResource BoolToVisibility}}">
             <DataGrid.Columns>
-                <DataGridTextColumn Header="Index" Binding="{Binding Index}" Width="160" />
-                <DataGridTextColumn Header="Shard" Binding="{Binding Shard}" Width="70" />
-                <DataGridTextColumn Header="Pri/Rep" Binding="{Binding PriRep}" Width="70" />
-                <DataGridTextColumn Header="State" Binding="{Binding State}" Width="110" />
-                <DataGridTextColumn Header="Docs" Binding="{Binding Docs}" Width="90" />
-                <DataGridTextColumn Header="Store" Binding="{Binding Store}" Width="100" />
-                <DataGridTextColumn Header="IP" Binding="{Binding Ip}" Width="130" />
-                <DataGridTextColumn Header="Node" Binding="{Binding Node}" Width="*" />
+                <DataGridTextColumn Binding="{Binding Index}" Width="160" />
+                <DataGridTextColumn Binding="{Binding Shard}" Width="70" />
+                <DataGridTextColumn Binding="{Binding PriRep}" Width="70" />
+                <DataGridTextColumn Binding="{Binding State}" Width="110" />
+                <DataGridTextColumn Binding="{Binding Docs}" Width="90" />
+                <DataGridTextColumn Binding="{Binding Store}" Width="100" />
+                <DataGridTextColumn Binding="{Binding Ip}" Width="130" />
+                <DataGridTextColumn Binding="{Binding Node}" Width="*" />
             </DataGrid.Columns>
         </DataGrid>
 

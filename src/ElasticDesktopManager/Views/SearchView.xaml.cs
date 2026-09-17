@@ -43,7 +43,6 @@ public partial class SearchView : UserControl
         Localize();
         _vm?.Relocalize();   // VM 拼装的文案（命中数/页码/每页条数下拉）也要跟着切
     }
-
     /// <summary>从索引页跳转带入预选索引；视图未加载完成时缓存到 Loaded 后应用。</summary>
     public void PreselectIndex(string indexName)
     {

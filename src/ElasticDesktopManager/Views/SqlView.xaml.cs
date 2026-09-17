@@ -16,19 +16,7 @@ public partial class SqlView : UserControl
         Loaded += (_, _) =>
         {
             _vm = DataContext as SqlViewModel;
-            TitleText.Text = Localization.L("sql.title");
-            InputLabel.Text = Localization.L("sql.title");
-            FetchLabel.Text = Localization.L("sql.fetchSize");
-            ExecuteButton.Content = Localization.L("sql.execute");
-            ExportButton.Content = Localization.L("sql.csv");
-            PrevButton.Content = "‹ " + Localization.L("sql.prevPage");
-            NextButton.Content = Localization.L("sql.nextPage") + " ›";
-            TabTableHeader.Text = Localization.L("sql.tab.table");
-            TabJsonHeader.Text = Localization.L("sql.tab.json");
-            NoDataHint.Text = Localization.L("sql.noData");
-            HelpTitle.Text = Localization.L("sql.help.title");
-            HelpBody.Text = Localization.L("sql.help.body");
-
+            Localize();
             if (_vm is not null)
                 _vm.StructureChanged += RebuildColumns;
         };
@@ -37,6 +25,31 @@ public partial class SqlView : UserControl
             if (_vm is not null)
                 _vm.StructureChanged -= RebuildColumns;
         };
+        // 页面被 MainViewModel 缓存、切语言时不会重新 Loaded，必须显式订阅
+        // （视图与应用同生命周期，无需解绑）。
+        Localization.LanguageChanged += OnLanguageChanged;
+    }
+
+    private void OnLanguageChanged()
+    {
+        Localize();
+        _vm?.Relocalize();   // 摘要（耗时/行数）与页码是 VM 拼好缓存的
+    }
+
+    private void Localize()
+    {
+        TitleText.Text = Localization.L("sql.title");
+        InputLabel.Text = Localization.L("sql.title");
+        FetchLabel.Text = Localization.L("sql.fetchSize");
+        ExecuteButton.Content = Localization.L("sql.execute");
+        ExportButton.Content = Localization.L("sql.csv");
+        PrevButton.Content = "‹ " + Localization.L("sql.prevPage");
+        NextButton.Content = Localization.L("sql.nextPage") + " ›";
+        TabTableHeader.Text = Localization.L("sql.tab.table");
+        TabJsonHeader.Text = Localization.L("sql.tab.json");
+        NoDataHint.Text = Localization.L("sql.noData");
+        HelpTitle.Text = Localization.L("sql.help.title");
+        HelpBody.Text = Localization.L("sql.help.body");
     }
 
     private void RebuildColumns()

@@ -462,14 +462,15 @@ public class SnapshotViewModel : PageViewModelBase
         ShowIlmJsonCommand = new RelayCommand(_ => ShowPolicyJson(
             Localization.L("snapshot.tab.ilm"), SelectedIlmPolicy?.PolicyId ?? "", IlmPolicyJson));
         FillIlmTemplateCommand = new RelayCommand(_ => NewIlmBody = IlmTemplate);
-
-        Localization.LanguageChanged += OnLanguageChanged;
     }
 
-    private void OnLanguageChanged()
+    /// <summary>
+    /// 语言切换：重写"统计/空态"这类成功文案；错误文案是 ES 原文，不该被覆盖掉。
+    /// 订阅点统一放在 SnapshotView（视图与服务同生命周期，VM 不直接挂静态事件）。
+    /// </summary>
+    protected override void OnRelocalize()
     {
         OnPropertyChanged(nameof(SnapshotDetail));
-        // 只重写"统计/空态"这类成功文案；错误文案是 ES 原文，不该被覆盖掉
         RelocalizeStatuses();
     }
 
