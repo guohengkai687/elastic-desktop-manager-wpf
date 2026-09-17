@@ -494,7 +494,8 @@ public class SnapshotViewModel : PageViewModelBase
 
     private void UpdateRepoStatus()
     {
-        if (RepoStatus.IsError) return;
+        // 注意：这里**不能**因为"当前处于错误态"就提前返回 ——
+        // 否则一次失败之后，后续成功的刷新也永远清不掉那条红色错误。
         RepoStatus.Ok(Repositories.Count > 0
             ? Localization.L("snapshot.status.repos", Repositories.Count)
             : Localization.L("snapshot.repo.empty"));
@@ -531,7 +532,7 @@ public class SnapshotViewModel : PageViewModelBase
 
     private void UpdateSnapshotStatus()
     {
-        if (SnapshotStatus.IsError) return;
+        // 同 UpdateRepoStatus：成功加载必须能清掉上一次的错误文案。
         if (SelectedRepository is null)
         {
             SnapshotStatus.Ok(Localization.L("snapshot.needRepo"));
