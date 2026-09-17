@@ -9,198 +9,630 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- 头部 -->
-        <Grid Grid.Row="0" Margin="0,0,0,14"
-              Visibility="{Binding HasConnection, Converter={StaticResource BoolToVisibility}}">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
+        <StackPanel Visibility="{Binding HasConnection, Converter={StaticResource BoolToVisibility}}">
             <TextBlock x:Name="TitleText" Style="{StaticResource PageTitleStyle}" />
-            <TextBlock Grid.Column="1" VerticalAlignment="Center" Margin="16,0,0,0"
-                       Style="{StaticResource CaptionStyle}"
-                       Text="{Binding SummaryText, Mode=OneWay}" />
-            <Button Grid.Column="2" Style="{StaticResource IconButtonStyle}" Click="OnRefresh">
-                        <Path Style="{StaticResource IconPathStyle}"
-                              Data="{x:Static icons:AppIconGeometries.Refresh}"
-                              Stroke="{DynamicResource TextSecondaryBrush}" />
-                    </Button>
-        </Grid>
+            <TextBlock x:Name="SubtitleText" Style="{StaticResource PageSubtitleStyle}" />
+        </StackPanel>
 
-        <Grid Grid.Row="1" Visibility="{Binding HasConnection, Converter={StaticResource BoolToVisibility}}">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="360" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
+        <!-- ================= 五个列表 ================= -->
+        <TabControl Grid.Row="1" Margin="0,14,0,0"
+                    SelectedIndex="{Binding SelectedTabIndex}"
+                    Visibility="{Binding HasConnection, Converter={StaticResource BoolToVisibility}}">
 
-            <!-- 左：仓库管理 -->
-            <Border Style="{StaticResource CardStyle}" VerticalAlignment="Top">
-                <StackPanel>
-                    <TextBlock x:Name="RepoSectionTitle" Style="{StaticResource SectionTitleStyle}" />
+            <!-- ===== ① 仓库管理 ===== -->
+            <TabItem x:Name="TabRepo">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
 
-                    <ComboBox Margin="0,10,0,0" ItemsSource="{Binding Repositories}"
-                              SelectedItem="{Binding SelectedRepository, Mode=TwoWay}"
-                              DisplayMemberPath="Name" />
-                    <TextBlock Margin="0,6,0,0" Style="{StaticResource CaptionStyle}"
-                               Text="{Binding SelectedRepository.Summary, Mode=OneWay}" />
-
-                    <Border Style="{StaticResource HLineStyle}" Margin="0,12" />
-
-                    <TextBlock x:Name="RepoNameLabel" Style="{StaticResource CaptionStyle}" />
-                    <TextBox x:Name="RepoNameBox" Margin="0,4,0,8"
-                             Text="{Binding NewRepoName, UpdateSourceTrigger=PropertyChanged}" />
-
-                    <TextBlock x:Name="RepoLocationLabel" Style="{StaticResource CaptionStyle}" />
-                    <TextBox x:Name="RepoLocationBox" Margin="0,4,0,8"
-                             Text="{Binding NewRepoLocation, UpdateSourceTrigger=PropertyChanged}" />
-
-                    <TextBlock x:Name="RepoPathHint" Style="{StaticResource CaptionStyle}" TextWrapping="Wrap" />
-
-                    <WrapPanel Margin="0,12,0,0">
-                        <Button x:Name="CreateRepoButton" Style="{StaticResource AccentButtonStyle}"
-                                Margin="0,0,8,0" Command="{Binding CreateRepositoryCommand}" />
-                        <Button x:Name="VerifyRepoButton" Margin="0,0,8,0"
-                                Command="{Binding VerifyRepositoryCommand}"
-                                IsEnabled="{Binding HasRepository}" />
-                        <Button x:Name="DeleteRepoButton" Style="{StaticResource DangerButtonStyle}"
-                                Command="{Binding DeleteRepositoryCommand}"
-                                IsEnabled="{Binding HasRepository}" />
-                    </WrapPanel>
-
-                    <TextBox x:Name="RepoSettingsBox" Margin="0,12,0,0" Height="130" IsReadOnly="True"
-                             AcceptsReturn="True" TextWrapping="NoWrap" FontSize="11"
-                             FontFamily="{StaticResource MonoFont}"
-                             Background="{DynamicResource SurfaceAltBrush}"
-                             VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
-                             Text="{Binding RepositorySettingsJson, Mode=OneWay}" />
-                </StackPanel>
-            </Border>
-
-            <!-- 右：创建快照 + 快照列表 -->
-            <Grid Grid.Column="1" Margin="14,0,0,0">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                </Grid.RowDefinitions>
-
-                <Border Grid.Row="0" Style="{StaticResource CardStyle}">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="220" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
-
-                        <TextBlock x:Name="CreateSnapshotTitle" Grid.ColumnSpan="3"
-                                   Style="{StaticResource SectionTitleStyle}" />
-
-                        <TextBlock x:Name="SnapshotNameLabel" Grid.Row="1" Grid.Column="0"
-                                   Margin="0,10,8,0" Style="{StaticResource CaptionStyle}" />
-                        <TextBlock x:Name="SnapshotIndicesLabel" Grid.Row="1" Grid.Column="1"
-                                   Margin="0,10,0,0" Style="{StaticResource CaptionStyle}" />
-
-                        <TextBox x:Name="SnapshotNameBox" Grid.Row="2" Grid.Column="0" Margin="0,4,8,0"
-                                 Text="{Binding NewSnapshotName, UpdateSourceTrigger=PropertyChanged}" />
-                        <TextBox x:Name="SnapshotIndicesBox" Grid.Row="2" Grid.Column="1" Margin="0,4,0,0"
-                                 Text="{Binding NewSnapshotIndices, UpdateSourceTrigger=PropertyChanged}" />
-
-                        <StackPanel Grid.Row="1" Grid.RowSpan="2" Grid.Column="2" Margin="14,10,0,0">
-                            <CheckBox x:Name="GlobalStateCheck" IsChecked="{Binding IncludeGlobalState}" />
-                            <Button x:Name="CreateSnapshotButton" Style="{StaticResource AccentButtonStyle}"
-                                    Margin="0,10,0,0" Command="{Binding CreateSnapshotCommand}" />
+                    <Grid Margin="0,0,0,10">
+                        <StackPanel Orientation="Horizontal">
+                            <Button Style="{StaticResource AccentButtonStyle}" Command="{Binding ToggleFormCommand}">
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Style="{StaticResource IconPathSmallStyle}"
+                                          Data="{x:Static icons:AppIconGeometries.Add}"
+                                          Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                                    <TextBlock x:Name="RepoNewText" Margin="6,0,0,0" />
+                                </StackPanel>
+                            </Button>
+                            <Button x:Name="RepoVerifyButton" Style="{StaticResource IconButtonStyle}" Margin="8,0,0,0"
+                                    Command="{Binding VerifyRepositoryCommand}">
+                                <Path Style="{StaticResource IconPathStyle}"
+                                      Data="{x:Static icons:AppIconGeometries.Check}"
+                                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                            </Button>
+                            <Button x:Name="RepoDeleteButton" Style="{StaticResource IconButtonStyle}"
+                                    Command="{Binding DeleteRepositoryCommand}">
+                                <Path Style="{StaticResource IconPathStyle}"
+                                      Data="{x:Static icons:AppIconGeometries.Delete}"
+                                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                            </Button>
+                            <Button x:Name="RepoRefreshButton" Style="{StaticResource IconButtonStyle}"
+                                    Command="{Binding RefreshCommand}">
+                                <Path Style="{StaticResource IconPathStyle}"
+                                      Data="{x:Static icons:AppIconGeometries.Refresh}"
+                                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                            </Button>
                         </StackPanel>
+                        <TextBlock HorizontalAlignment="Right" VerticalAlignment="Center"
+                                   DataContext="{Binding RepoStatus}"
+                                   Style="{StaticResource StatusLineStyle}" Text="{Binding Text}" />
                     </Grid>
-                </Border>
 
-                <Border Grid.Row="1" Style="{StaticResource CardStyle}" Padding="0" Margin="0,14,0,0">
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
+                    <Border Grid.Row="1" Style="{StaticResource CardStyle}" Margin="0,0,0,10"
+                            Visibility="{Binding IsFormOpen, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel>
+                            <Grid>
+                                <TextBlock x:Name="RepoFormTitle" Style="{StaticResource SectionTitleStyle}" />
+                                <Button HorizontalAlignment="Right" Style="{StaticResource IconButtonStyle}"
+                                        Command="{Binding ToggleFormCommand}">
+                                    <Path Style="{StaticResource IconPathSmallStyle}"
+                                          Data="{x:Static icons:AppIconGeometries.Close}"
+                                          Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                                </Button>
+                            </Grid>
+                            <Grid Margin="0,10,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Margin="0,0,12,0">
+                                    <TextBlock x:Name="RepoTypeLabel" Style="{StaticResource FieldLabelStyle}" />
+                                    <ComboBox Width="110" ItemsSource="{Binding RepositoryTypes}"
+                                              DisplayMemberPath="Label" SelectedValuePath="Code"
+                                              SelectedValue="{Binding NewRepoType}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Margin="0,0,12,0">
+                                    <TextBlock x:Name="RepoNameLabel" Style="{StaticResource FieldLabelStyle}" />
+                                    <TextBox Width="190" VerticalContentAlignment="Center"
+                                             Text="{Binding NewRepoName, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" Margin="0,0,12,0">
+                                    <TextBlock x:Name="RepoLocationLabel" Style="{StaticResource FieldLabelStyle}" />
+                                    <TextBox VerticalContentAlignment="Center"
+                                             Text="{Binding NewRepoLocation, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                                <Button Grid.Column="3" x:Name="RepoCreateButton" VerticalAlignment="Bottom"
+                                        Style="{StaticResource AccentButtonStyle}"
+                                        Command="{Binding CreateRepositoryCommand}" />
+                            </Grid>
+                            <TextBlock x:Name="RepoPathHint" Style="{StaticResource CaptionStyle}" Margin="0,10,0,0" />
+                        </StackPanel>
+                    </Border>
 
-                        <!-- 工具条 -->
-                        <Grid Margin="14,12,14,10">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <Button x:Name="DeleteSnapshotButton" Style="{StaticResource DangerButtonStyle}"
-                                    Margin="0,0,8,0" Command="{Binding DeleteSnapshotCommand}"
-                                    IsEnabled="{Binding HasSnapshot}" />
-                            <Button x:Name="RestoreSnapshotButton" Grid.Column="1"
-                                    Command="{Binding RestoreSnapshotCommand}"
-                                    IsEnabled="{Binding HasSnapshot}" />
-                            <TextBox x:Name="RestoreIndicesBox" Grid.Column="2" Margin="14,0" MinWidth="180"
-                                     Text="{Binding RestoreIndices, UpdateSourceTrigger=PropertyChanged}" />
-                            <TextBlock Grid.Column="3" VerticalAlignment="Center"
-                                       Style="{StaticResource CaptionStyle}"
-                                       Text="{Binding Snapshots.Count, Mode=OneWay}" />
-                        </Grid>
+                    <DataGrid x:Name="RepoGrid" Grid.Row="2" IsReadOnly="True"
+                              ItemsSource="{Binding Repositories}"
+                              SelectedItem="{Binding SelectedRepository}">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Binding="{Binding Name}" Width="220" />
+                            <DataGridTextColumn Binding="{Binding Type}" Width="90" />
+                            <DataGridTextColumn Binding="{Binding Location}" Width="*" />
+                        </DataGrid.Columns>
+                    </DataGrid>
 
-                        <DataGrid Grid.Row="1" ItemsSource="{Binding Snapshots}"
-                                  SelectedItem="{Binding SelectedSnapshot, Mode=TwoWay}"
-                                  IsReadOnly="True" BorderThickness="0,1,0,0"
-                                  BorderBrush="{DynamicResource SeparatorBrush}">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn x:Name="ColName" Binding="{Binding Name}" Width="2*" />
-                                <DataGridTemplateColumn x:Name="ColState" Width="110">
-                                    <DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate>
-                                            <!-- 状态指示：小圆点 + 文本（不用满色底 badge，避免浅色文字在强色底上不可读） -->
-                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                <Ellipse Width="8" Height="8" Margin="0,0,7,0">
-                                                    <Ellipse.Style>
-                                                        <Style TargetType="Ellipse">
-                                                            <Setter Property="Fill" Value="{DynamicResource GrayBrush}" />
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding State}" Value="SUCCESS">
-                                                                    <Setter Property="Fill" Value="{DynamicResource GreenBrush}" />
-                                                                </DataTrigger>
-                                                                <DataTrigger Binding="{Binding State}" Value="FAILED">
-                                                                    <Setter Property="Fill" Value="{DynamicResource RedBrush}" />
-                                                                </DataTrigger>
-                                                                <DataTrigger Binding="{Binding State}" Value="PARTIAL">
-                                                                    <Setter Property="Fill" Value="{DynamicResource YellowBrush}" />
-                                                                </DataTrigger>
-                                                                <DataTrigger Binding="{Binding State}" Value="IN_PROGRESS">
-                                                                    <Setter Property="Fill" Value="{DynamicResource AccentBrush}" />
-                                                                </DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </Ellipse.Style>
-                                                </Ellipse>
-                                                <TextBlock Text="{Binding State}" FontSize="11"
-                                                           VerticalAlignment="Center" />
-                                            </StackPanel>
-                                        </DataTemplate>
-                                    </DataGridTemplateColumn.CellTemplate>
-                                </DataGridTemplateColumn>
-                                <DataGridTextColumn x:Name="ColIndices" Binding="{Binding IndexCount}" Width="70" />
-                                <DataGridTextColumn x:Name="ColShards" Binding="{Binding ShardsText}" Width="90" />
-                                <DataGridTextColumn x:Name="ColStarted" Binding="{Binding StartedAt}" Width="150" />
-                                <DataGridTextColumn x:Name="ColDuration" Binding="{Binding Duration}" Width="90" />
-                                <DataGridTextColumn x:Name="ColVersion" Binding="{Binding Version}" Width="90" />
-                            </DataGrid.Columns>
-                        </DataGrid>
+                    <StackPanel Grid.Row="3" Margin="0,10,0,0"
+                                Visibility="{Binding HasRepository, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock x:Name="RepoSettingsLabel" Style="{StaticResource FieldLabelStyle}" />
+                        <TextBox Style="{StaticResource DetailBoxStyle}" Height="72"
+                                 Text="{Binding RepositorySettingsJson, Mode=OneWay}" />
+                    </StackPanel>
+                </Grid>
+            </TabItem>
 
-                        <Border Grid.Row="2" Padding="14,8" Background="{DynamicResource SurfaceAltBrush}">
-                            <TextBlock Style="{StaticResource CaptionStyle}" TextTrimming="CharacterEllipsis"
-                                       Text="{Binding SnapshotDetail, Mode=OneWay}" />
-                        </Border>
+            <!-- ===== ② 快照管理 ===== -->
+            <TabItem x:Name="TabSnapshots">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <Grid Margin="0,0,0,10">
+                        <StackPanel Orientation="Horizontal">
+                            <Button Style="{StaticResource AccentButtonStyle}" Command="{Binding ToggleFormCommand}">
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Style="{StaticResource IconPathSmallStyle}"
+                                          Data="{x:Static icons:AppIconGeometries.Add}"
+                                          Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                                    <TextBlock x:Name="SnapshotNewText" Margin="6,0,0,0" />
+                                </StackPanel>
+                            </Button>
+                            <Button x:Name="SnapshotJsonButton" Style="{StaticResource IconButtonStyle}" Margin="8,0,0,0"
+                                    Command="{Binding ShowSnapshotJsonCommand}">
+                                <Path Style="{StaticResource IconPathStyle}"
+                                      Data="{x:Static icons:AppIconGeometries.Search}"
+                                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                            </Button>
+                            <Button x:Name="SnapshotDeleteButton" Style="{StaticResource IconButtonStyle}"
+                                    Command="{Binding DeleteSnapshotCommand}">
+                                <Path Style="{StaticResource IconPathStyle}"
+                                      Data="{x:Static icons:AppIconGeometries.Delete}"
+                                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                            </Button>
+                            <Button x:Name="SnapshotRefreshButton" Style="{StaticResource IconButtonStyle}"
+                                    Command="{Binding RefreshCommand}">
+                                <Path Style="{StaticResource IconPathStyle}"
+                                      Data="{x:Static icons:AppIconGeometries.Refresh}"
+                                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                            </Button>
+                        </StackPanel>
+                        <TextBlock HorizontalAlignment="Right" VerticalAlignment="Center"
+                                   DataContext="{Binding SnapshotStatus}"
+                                   Style="{StaticResource StatusLineStyle}" Text="{Binding Text}" />
                     </Grid>
-                </Border>
-            </Grid>
-        </Grid>
+
+                    <Border Grid.Row="1" Style="{StaticResource CardStyle}" Margin="0,0,0,10"
+                            Visibility="{Binding IsFormOpen, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel>
+                            <Grid>
+                                <TextBlock x:Name="SnapshotFormTitle" Style="{StaticResource SectionTitleStyle}" />
+                                <Button HorizontalAlignment="Right" Style="{StaticResource IconButtonStyle}"
+                                        Command="{Binding ToggleFormCommand}">
+                                    <Path Style="{StaticResource IconPathSmallStyle}"
+                                          Data="{x:Static icons:AppIconGeometries.Close}"
+                                          Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                                </Button>
+                            </Grid>
+                            <Grid Margin="0,10,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Margin="0,0,12,0">
+                                    <TextBlock x:Name="SnapshotNameLabel" Style="{StaticResource FieldLabelStyle}" />
+                                    <TextBox Width="220" VerticalContentAlignment="Center"
+                                             Text="{Binding NewSnapshotName, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Margin="0,0,12,0">
+                                    <TextBlock x:Name="SnapshotIndicesLabel" Style="{StaticResource FieldLabelStyle}" />
+                                    <TextBox VerticalContentAlignment="Center"
+                                             Text="{Binding NewSnapshotIndices, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                                <CheckBox Grid.Column="2" x:Name="SnapshotGlobalStateCheck" VerticalAlignment="Bottom"
+                                          Margin="0,0,12,6" IsChecked="{Binding IncludeGlobalState}" />
+                                <Button Grid.Column="3" x:Name="SnapshotCreateButton" VerticalAlignment="Bottom"
+                                        Style="{StaticResource AccentButtonStyle}"
+                                        Command="{Binding CreateSnapshotCommand}" />
+                            </Grid>
+                            <TextBlock x:Name="SnapshotAsyncHint" Style="{StaticResource CaptionStyle}" Margin="0,10,0,0" />
+                        </StackPanel>
+                    </Border>
+
+                    <DataGrid x:Name="SnapshotGrid" Grid.Row="2" IsReadOnly="True"
+                              ItemsSource="{Binding Snapshots}"
+                              SelectedItem="{Binding SelectedSnapshot}">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Binding="{Binding Name}" Width="240" />
+                            <DataGridTemplateColumn Width="130">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <Ellipse Width="8" Height="8" VerticalAlignment="Center">
+                                                <Ellipse.Style>
+                                                    <Style TargetType="Ellipse">
+                                                        <Setter Property="Fill" Value="{DynamicResource GrayBrush}" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding State}" Value="SUCCESS">
+                                                                <Setter Property="Fill" Value="{DynamicResource GreenBrush}" />
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding State}" Value="FAILED">
+                                                                <Setter Property="Fill" Value="{DynamicResource RedBrush}" />
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding State}" Value="PARTIAL">
+                                                                <Setter Property="Fill" Value="{DynamicResource YellowBrush}" />
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding State}" Value="IN_PROGRESS">
+                                                                <Setter Property="Fill" Value="{DynamicResource AccentBrush}" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Ellipse.Style>
+                                            </Ellipse>
+                                            <TextBlock Text="{Binding State}" Margin="7,0,0,0" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Binding="{Binding IndexCount}" Width="80" />
+                            <DataGridTextColumn Binding="{Binding ShardsText}" Width="110" />
+                            <DataGridTextColumn Binding="{Binding StartedAt}" Width="160" />
+                            <DataGridTextColumn Binding="{Binding Duration}" Width="100" />
+                            <DataGridTextColumn Binding="{Binding Version}" Width="*" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+
+                    <TextBlock Grid.Row="3" Margin="0,10,0,0" TextWrapping="Wrap"
+                               Style="{StaticResource CaptionStyle}" Text="{Binding SnapshotDetail, Mode=OneWay}" />
+                </Grid>
+            </TabItem>
+
+            <!-- ===== ③ 快照恢复 ===== -->
+            <TabItem x:Name="TabRestore">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <Grid Margin="0,0,0,10">
+                        <StackPanel Orientation="Horizontal">
+                            <Button x:Name="RestoreRunButton" Style="{StaticResource AccentButtonStyle}"
+                                    Command="{Binding RestoreSnapshotCommand}" />
+                            <Button x:Name="RestoreRefreshButton" Style="{StaticResource IconButtonStyle}" Margin="8,0,0,0"
+                                    Command="{Binding RefreshRecoveryCommand}">
+                                <Path Style="{StaticResource IconPathStyle}"
+                                      Data="{x:Static icons:AppIconGeometries.Refresh}"
+                                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                            </Button>
+                        </StackPanel>
+                        <TextBlock HorizontalAlignment="Right" VerticalAlignment="Center"
+                                   DataContext="{Binding RestoreStatus}"
+                                   Style="{StaticResource StatusLineStyle}" Text="{Binding Text}" />
+                    </Grid>
+
+                    <Border Grid.Row="1" Style="{StaticResource CardStyle}" Margin="0,0,0,10">
+                        <StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Margin="0,0,12,0">
+                                    <TextBlock x:Name="RestoreRepoLabel" Style="{StaticResource FieldLabelStyle}" />
+                                    <ComboBox Width="170" ItemsSource="{Binding Repositories}" DisplayMemberPath="Name"
+                                              SelectedItem="{Binding RestoreRepository}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Margin="0,0,12,0">
+                                    <TextBlock x:Name="RestoreSnapshotLabel" Style="{StaticResource FieldLabelStyle}" />
+                                    <ComboBox Width="230" ItemsSource="{Binding RestoreSnapshots}"
+                                              SelectedItem="{Binding RestoreSnapshotName}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock x:Name="RestoreIndicesLabel" Style="{StaticResource FieldLabelStyle}" />
+                                    <TextBox VerticalContentAlignment="Center"
+                                             Text="{Binding RestoreIndices, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                            </Grid>
+                            <Grid Margin="0,10,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Margin="0,0,12,0">
+                                    <TextBlock x:Name="RenamePatternLabel" Style="{StaticResource FieldLabelStyle}" />
+                                    <TextBox VerticalContentAlignment="Center"
+                                             Text="{Binding RenamePattern, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Margin="0,0,12,0">
+                                    <TextBlock x:Name="RenameReplacementLabel" Style="{StaticResource FieldLabelStyle}" />
+                                    <TextBox VerticalContentAlignment="Center"
+                                             Text="{Binding RenameReplacement, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                                <CheckBox Grid.Column="2" x:Name="RestoreGlobalStateCheck" VerticalAlignment="Bottom"
+                                          Margin="0,0,0,6" IsChecked="{Binding RestoreIncludeGlobalState}" />
+                            </Grid>
+                            <TextBlock x:Name="RestoreWarning" Style="{StaticResource CaptionStyle}" Margin="0,10,0,0" />
+                        </StackPanel>
+                    </Border>
+
+                    <DataGrid x:Name="RecoveryGrid" Grid.Row="2" IsReadOnly="True"
+                              ItemsSource="{Binding RecoveryShards}">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Binding="{Binding Index}" Width="230" />
+                            <DataGridTextColumn Binding="{Binding Shard}" Width="70" />
+                            <DataGridTemplateColumn Width="130">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <Ellipse Width="8" Height="8" VerticalAlignment="Center">
+                                                <Ellipse.Style>
+                                                    <Style TargetType="Ellipse">
+                                                        <Setter Property="Fill" Value="{DynamicResource AccentBrush}" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Stage}" Value="DONE">
+                                                                <Setter Property="Fill" Value="{DynamicResource GreenBrush}" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Ellipse.Style>
+                                            </Ellipse>
+                                            <TextBlock Text="{Binding Stage}" Margin="7,0,0,0" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Binding="{Binding Type}" Width="140" />
+                            <DataGridTextColumn Binding="{Binding Source}" Width="150" />
+                            <DataGridTextColumn Binding="{Binding Target}" Width="150" />
+                            <DataGridTextColumn Binding="{Binding FilesPercent}" Width="100" />
+                            <DataGridTextColumn Binding="{Binding BytesText}" Width="180" />
+                            <DataGridTextColumn Binding="{Binding TimeText}" Width="*" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </TabItem>
+
+            <!-- ===== ④ 自动策略 SLM ===== -->
+            <TabItem x:Name="TabSlm">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <Grid Margin="0,0,0,10">
+                        <StackPanel Orientation="Horizontal">
+                            <Button Style="{StaticResource AccentButtonStyle}" Command="{Binding ToggleFormCommand}">
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Style="{StaticResource IconPathSmallStyle}"
+                                          Data="{x:Static icons:AppIconGeometries.Add}"
+                                          Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                                    <TextBlock x:Name="SlmNewText" Margin="6,0,0,0" />
+                                </StackPanel>
+                            </Button>
+                            <Button x:Name="SlmExecuteButton" Style="{StaticResource IconButtonStyle}" Margin="8,0,0,0"
+                                    Command="{Binding ExecuteSlmCommand}">
+                                <Path Style="{StaticResource IconPathStyle}"
+                                      Data="{x:Static icons:AppIconGeometries.Run}"
+                                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                            </Button>
+                            <Button x:Name="SlmJsonButton" Style="{StaticResource IconButtonStyle}"
+                                    Command="{Binding ShowSlmJsonCommand}">
+                                <Path Style="{StaticResource IconPathStyle}"
+                                      Data="{x:Static icons:AppIconGeometries.Search}"
+                                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                            </Button>
+                            <Button x:Name="SlmDeleteButton" Style="{StaticResource IconButtonStyle}"
+                                    Command="{Binding DeleteSlmCommand}">
+                                <Path Style="{StaticResource IconPathStyle}"
+                                      Data="{x:Static icons:AppIconGeometries.Delete}"
+                                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                            </Button>
+                            <Button x:Name="SlmRefreshButton" Style="{StaticResource IconButtonStyle}"
+                                    Command="{Binding RefreshSlmCommand}">
+                                <Path Style="{StaticResource IconPathStyle}"
+                                      Data="{x:Static icons:AppIconGeometries.Refresh}"
+                                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                            </Button>
+                        </StackPanel>
+                        <TextBlock HorizontalAlignment="Right" VerticalAlignment="Center"
+                                   DataContext="{Binding SlmStatus}"
+                                   Style="{StaticResource StatusLineStyle}" Text="{Binding Text}" />
+                    </Grid>
+
+                    <Border Grid.Row="1" Style="{StaticResource CardStyle}" Margin="0,0,0,10"
+                            Visibility="{Binding IsFormOpen, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel>
+                            <Grid>
+                                <TextBlock x:Name="SlmFormTitle" Style="{StaticResource SectionTitleStyle}" />
+                                <Button HorizontalAlignment="Right" Style="{StaticResource IconButtonStyle}"
+                                        Command="{Binding ToggleFormCommand}">
+                                    <Path Style="{StaticResource IconPathSmallStyle}"
+                                          Data="{x:Static icons:AppIconGeometries.Close}"
+                                          Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                                </Button>
+                            </Grid>
+                            <Grid Margin="0,10,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Margin="0,0,12,0">
+                                    <TextBlock x:Name="SlmIdLabel" Style="{StaticResource FieldLabelStyle}" />
+                                    <TextBox Width="140" VerticalContentAlignment="Center"
+                                             Text="{Binding NewSlmId, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Margin="0,0,12,0">
+                                    <TextBlock x:Name="SlmNameLabel" Style="{StaticResource FieldLabelStyle}" />
+                                    <TextBox Width="180" VerticalContentAlignment="Center"
+                                             Text="{Binding NewSlmNameTemplate, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" Margin="0,0,12,0">
+                                    <TextBlock x:Name="SlmScheduleLabel" Style="{StaticResource FieldLabelStyle}" />
+                                    <TextBox Width="150" VerticalContentAlignment="Center"
+                                             Text="{Binding NewSlmSchedule, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="3">
+                                    <TextBlock x:Name="SlmRepoLabel" Style="{StaticResource FieldLabelStyle}" />
+                                    <ComboBox Width="170" ItemsSource="{Binding Repositories}" DisplayMemberPath="Name"
+                                              SelectedItem="{Binding NewSlmRepository}" />
+                                </StackPanel>
+                            </Grid>
+                            <Grid Margin="0,10,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Margin="0,0,12,0">
+                                    <TextBlock x:Name="SlmIndicesLabel" Style="{StaticResource FieldLabelStyle}" />
+                                    <TextBox VerticalContentAlignment="Center"
+                                             Text="{Binding NewSlmIndices, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Margin="0,0,12,0">
+                                    <TextBlock x:Name="SlmExpireLabel" Style="{StaticResource FieldLabelStyle}" />
+                                    <TextBox Width="110" VerticalContentAlignment="Center"
+                                             Text="{Binding NewSlmExpireAfter, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" Margin="0,0,12,0">
+                                    <TextBlock x:Name="SlmMinLabel" Style="{StaticResource FieldLabelStyle}" />
+                                    <TextBox Width="80" VerticalContentAlignment="Center"
+                                             Text="{Binding NewSlmMinCount, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="3" Margin="0,0,12,0">
+                                    <TextBlock x:Name="SlmMaxLabel" Style="{StaticResource FieldLabelStyle}" />
+                                    <TextBox Width="80" VerticalContentAlignment="Center"
+                                             Text="{Binding NewSlmMaxCount, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                                <Button Grid.Column="4" x:Name="SlmCreateButton" VerticalAlignment="Bottom"
+                                        Style="{StaticResource AccentButtonStyle}" Command="{Binding CreateSlmCommand}" />
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <DataGrid x:Name="SlmGrid" Grid.Row="2" IsReadOnly="True"
+                              ItemsSource="{Binding SlmPolicies}"
+                              SelectedItem="{Binding SelectedSlmPolicy}">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Binding="{Binding PolicyId}" Width="170" />
+                            <DataGridTextColumn Binding="{Binding Schedule}" Width="150" />
+                            <DataGridTextColumn Binding="{Binding Repository}" Width="140" />
+                            <DataGridTextColumn Binding="{Binding SnapshotNameTemplate}" Width="180" />
+                            <DataGridTextColumn Binding="{Binding NextExecution}" Width="160" />
+                            <DataGridTextColumn Binding="{Binding LastSuccess}" Width="180" />
+                            <DataGridTemplateColumn Width="200">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding LastFailure}" VerticalAlignment="Center"
+                                                   TextTrimming="CharacterEllipsis">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding HasFailure}" Value="True">
+                                                            <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Binding="{Binding StatsText}" Width="*" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+
+                    <StackPanel Grid.Row="3" Margin="0,10,0,0"
+                                Visibility="{Binding HasSlmPolicy, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock x:Name="SlmPolicyJsonLabel" Style="{StaticResource FieldLabelStyle}" />
+                        <TextBox Style="{StaticResource DetailBoxStyle}" Height="72"
+                                 Text="{Binding SlmPolicyJson, Mode=OneWay}" />
+                    </StackPanel>
+                </Grid>
+            </TabItem>
+
+            <!-- ===== ⑤ 生命周期 ILM ===== -->
+            <TabItem x:Name="TabIlm">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <Grid Margin="0,0,0,10">
+                        <StackPanel Orientation="Horizontal">
+                            <Button Style="{StaticResource AccentButtonStyle}" Command="{Binding ToggleFormCommand}">
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Style="{StaticResource IconPathSmallStyle}"
+                                          Data="{x:Static icons:AppIconGeometries.Add}"
+                                          Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                                    <TextBlock x:Name="IlmNewText" Margin="6,0,0,0" />
+                                </StackPanel>
+                            </Button>
+                            <Button x:Name="IlmJsonButton" Style="{StaticResource IconButtonStyle}" Margin="8,0,0,0"
+                                    Command="{Binding ShowIlmJsonCommand}">
+                                <Path Style="{StaticResource IconPathStyle}"
+                                      Data="{x:Static icons:AppIconGeometries.Search}"
+                                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                            </Button>
+                            <Button x:Name="IlmDeleteButton" Style="{StaticResource IconButtonStyle}"
+                                    Command="{Binding DeleteIlmCommand}">
+                                <Path Style="{StaticResource IconPathStyle}"
+                                      Data="{x:Static icons:AppIconGeometries.Delete}"
+                                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                            </Button>
+                            <Button x:Name="IlmRefreshButton" Style="{StaticResource IconButtonStyle}"
+                                    Command="{Binding RefreshIlmCommand}">
+                                <Path Style="{StaticResource IconPathStyle}"
+                                      Data="{x:Static icons:AppIconGeometries.Refresh}"
+                                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                            </Button>
+                        </StackPanel>
+                        <TextBlock HorizontalAlignment="Right" VerticalAlignment="Center"
+                                   DataContext="{Binding IlmStatus}"
+                                   Style="{StaticResource StatusLineStyle}" Text="{Binding Text}" />
+                    </Grid>
+
+                    <Border Grid.Row="1" Style="{StaticResource CardStyle}" Margin="0,0,0,10"
+                            Visibility="{Binding IsFormOpen, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel>
+                            <Grid>
+                                <TextBlock x:Name="IlmFormTitle" Style="{StaticResource SectionTitleStyle}" />
+                                <Button HorizontalAlignment="Right" Style="{StaticResource IconButtonStyle}"
+                                        Command="{Binding ToggleFormCommand}">
+                                    <Path Style="{StaticResource IconPathSmallStyle}"
+                                          Data="{x:Static icons:AppIconGeometries.Close}"
+                                          Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                                </Button>
+                            </Grid>
+                            <Grid Margin="0,10,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Margin="0,0,12,0">
+                                    <TextBlock x:Name="IlmIdLabel" Style="{StaticResource FieldLabelStyle}" />
+                                    <TextBox Width="200" VerticalContentAlignment="Center"
+                                             Text="{Binding NewIlmId, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                                <Button Grid.Column="1" x:Name="IlmTemplateButton" VerticalAlignment="Bottom"
+                                        Margin="0,0,12,0" Command="{Binding FillIlmTemplateCommand}" />
+                                <TextBlock Grid.Column="2" x:Name="IlmBodyHint" VerticalAlignment="Bottom"
+                                           Margin="0,0,0,6" Style="{StaticResource CaptionStyle}" />
+                            </Grid>
+                            <TextBox Margin="0,10,0,0" Height="170" AcceptsReturn="True" TextWrapping="NoWrap"
+                                     VerticalContentAlignment="Top"
+                                     FontFamily="{StaticResource MonoFont}"
+                                     HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                                     Text="{Binding NewIlmBody, UpdateSourceTrigger=PropertyChanged}" />
+                            <Button x:Name="IlmCreateButton" HorizontalAlignment="Right" Margin="0,10,0,0"
+                                    Style="{StaticResource AccentButtonStyle}" Command="{Binding CreateIlmCommand}" />
+                        </StackPanel>
+                    </Border>
+
+                    <DataGrid x:Name="IlmGrid" Grid.Row="2" IsReadOnly="True"
+                              ItemsSource="{Binding IlmPolicies}"
+                              SelectedItem="{Binding SelectedIlmPolicy}">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Binding="{Binding PolicyId}" Width="230" />
+                            <DataGridTextColumn Binding="{Binding PhasesText}" Width="240" />
+                            <DataGridTextColumn Binding="{Binding IndicesInUseCount}" Width="110" />
+                            <DataGridTextColumn Binding="{Binding ModifiedDate}" Width="180" />
+                            <DataGridTextColumn Binding="{Binding IndicesInUse}" Width="*" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+
+                    <StackPanel Grid.Row="3" Margin="0,10,0,0"
+                                Visibility="{Binding HasIlmPolicy, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock x:Name="IlmJsonLabel" Style="{StaticResource FieldLabelStyle}" />
+                        <TextBox Style="{StaticResource DetailBoxStyle}" Height="72"
+                                 Text="{Binding IlmPolicyJson, Mode=OneWay}" />
+                    </StackPanel>
+                </Grid>
+            </TabItem>
+        </TabControl>
 
         <views:EmptyStateView Grid.Row="1"
                               Visibility="{Binding HasConnection, Converter={StaticResource InverseBoolToVisibility}}" />

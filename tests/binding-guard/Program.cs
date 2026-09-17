@@ -813,6 +813,134 @@ Check("i18n：zh_CN 与 en 词条数量完全相等", () =>
 });
 
 
+// ---- 规则：可编辑 ComboBox 必须提供 PART_EditableTextBox ----
+//
+// 背景（真实缺陷）：ComboBox 模板是我们自己写的，而 IsEditable="True" 时 WPF 需要模板里
+// 有一个名为 PART_EditableTextBox 的 TextBox 才能进入编辑态。缺了它，可编辑下拉直接不可用
+// （搜索页的索引下拉就是全项目唯一一个可编辑 ComboBox，也是唯一一个"下拉没数据"的控件）。
+// 构建期看不出来、本机也跑不了 WPF，只能靠静态规则兜住。
+static bool ComboTemplateHasEditableBox(string xaml)
+{
+    // 先去掉 XML 注释：模板里那段"必须提供 PART_EditableTextBox"的说明文字本身就会
+    // 让裸词匹配成功 —— 这正是"假绿"的来源（负向验证时抓到过一次）。
+    string code = Regex.Replace(xaml, "<!--.*?-->", "", RegexOptions.Singleline);
+    int idx = code.IndexOf("<ControlTemplate TargetType=\"ComboBox\">", StringComparison.Ordinal);
+    return idx >= 0 && code[idx..].Contains("x:Name=\"PART_EditableTextBox\"", StringComparison.Ordinal);
+}
+
+Check("控件模板：可编辑 ComboBox 必须包含 PART_EditableTextBox", () =>
+{
+    var editableUsers = new List<string>();
+    foreach (var f in Directory.GetFiles(Path.Combine(repoRoot, "src"), "*.xaml", SearchOption.AllDirectories))
+    {
+        if (Regex.IsMatch(File.ReadAllText(f), @"<ComboBox\b[^>]*\bIsEditable\s*=\s*""True"""))
+            editableUsers.Add(Path.GetRelativePath(repoRoot, f));
+    }
+    if (editableUsers.Count == 0) return; // 没人用可编辑下拉 → 不要求模板带该部件
+
+    var themesDir = Path.Combine(repoRoot, "src", "ElasticDesktopManager", "Themes");
+    bool ok = Directory.GetFiles(themesDir, "*.xaml").Any(f => ComboTemplateHasEditableBox(File.ReadAllText(f)));
+    if (!ok)
+        throw new Exception(
+            $"以下文件使用了可编辑 ComboBox（{string.Join(", ", editableUsers)}），" +
+            "但 Themes 下的 ComboBox 模板没有 PART_EditableTextBox —— WPF 无法进入编辑态，下拉会不可用");
+});
+
+// ---- 规则：代码里用到的 i18n key 必须真的存在 ----
+//
+// 两遍扫描，各管一类漏法：
+//   ① 精确遍（全部 src）：`Localization.L("key")` 里紧跟的字面量。任何前缀写错都能抓到。
+//   ② 宽松遍（仅 WPF 工程）：整个字面量就是一个"小写点分标识符"且首段命中词典已有前缀。
+//      这是为了抓 `(0, "node.table.name")` 这类不经过 Localization.L 的表头映射数组；
+//      只扫 WPF 工程是因为 Core 按约定不写界面文案，否则 `"node.role"`（_cat/nodes 的 JSON
+//      字段名）、`"config.json"`（文件名）都会被误判成 key。
+static (HashSet<string> Keys, HashSet<string> Prefixes) LoadDictionary(string root)
+{
+    string locFile = Path.Combine(root, "src", "ElasticDesktopManager.Core", "I18n", "Localization.cs");
+    var keys = Regex.Matches(File.ReadAllText(locFile), @"\[""([^""]+)""\]\s*=")
+        .Select(m => m.Groups[1].Value).ToHashSet();
+    var prefixes = keys.Where(k => k.Contains('.')).Select(k => k[..k.IndexOf('.')]).ToHashSet();
+    return (keys, prefixes);
+}
+
+static List<string> FindUnknownI18nKeys(string source, string label, HashSet<string> keys,
+    HashSet<string> prefixes, bool broad)
+{
+    var hits = new List<string>();
+    var seen = new HashSet<string>();          // 同一个 key 只报一次（两遍扫描会重合）
+    void Add(string key, string why)
+    {
+        if (seen.Add(key)) hits.Add($"{label}: {why}");
+    }
+
+    // ① 调用点
+    foreach (Match m in Regex.Matches(source, @"Localization\.L\(\s*""([^""]+)"""))
+    {
+        string key = m.Groups[1].Value;
+        if (!keys.Contains(key)) Add(key, $"Localization.L(\"{key}\")");
+    }
+
+    if (!broad) return hits;
+
+    // ② 整串字面量（含两边引号一起匹配 → URL、"application/json" 这类天然被排除）
+    foreach (Match m in Regex.Matches(source, @"""([a-z][A-Za-z0-9]*(?:\.[A-Za-z0-9]+)+)"""))
+    {
+        string key = m.Groups[1].Value;
+        if (!prefixes.Contains(key[..key.IndexOf('.')])) continue;
+        if (!keys.Contains(key)) Add(key, $"\"{key}\"");
+    }
+    return hits;
+}
+
+Check("i18n：代码里用到的 key 都存在于词典（防漏词条 → 界面直接显示 key）", () =>
+{
+    var (keys, prefixes) = LoadDictionary(repoRoot);
+    string root = Path.Combine(repoRoot, "src");
+    string wpfProject = Path.Combine(root, "ElasticDesktopManager") + Path.DirectorySeparatorChar;
+    var hits = new List<string>();
+
+    foreach (var f in Directory.GetFiles(root, "*.cs", SearchOption.AllDirectories))
+    {
+        if (Path.GetFileName(f) is "Localization.cs") continue; // 词典自身
+        bool broad = f.StartsWith(wpfProject, StringComparison.Ordinal);
+        hits.AddRange(FindUnknownI18nKeys(File.ReadAllText(f), Path.GetRelativePath(repoRoot, f),
+            keys, prefixes, broad));
+    }
+
+    if (hits.Count > 0)
+        throw new Exception($"发现 {hits.Count} 个未定义的 key：\n    " + string.Join("\n    ", hits.Distinct()));
+});
+
+Check("守卫自检：未定义的 i18n key / 缺失的 PART_EditableTextBox 必须能被抓出", () =>
+{
+    var keys = new HashSet<string> { "nav.home", "snapshot.col.name" };
+    var prefixes = new HashSet<string> { "nav", "snapshot" };
+
+    if (FindUnknownI18nKeys("""Localization.L("nav.home")""", "t", keys, prefixes, true).Count != 0)
+        throw new Exception("误报：已定义的 key");
+    if (FindUnknownI18nKeys("""Localization.L("nav.nope")""", "t", keys, prefixes, true).Count != 1)
+        throw new Exception("未抓出不存在的 key");
+    if (FindUnknownI18nKeys("""Localization.L("typo.home")""", "t", keys, prefixes, true).Count != 1)
+        throw new Exception("未抓出前缀都不存在的新 key（精确遍必须覆盖）");
+    if (FindUnknownI18nKeys("""new HeaderMap { (0, "snapshot.col.name") }""", "t", keys, prefixes, true).Count != 0)
+        throw new Exception("误报：表头映射里已定义的 key");
+    if (FindUnknownI18nKeys("""new HeaderMap { (0, "snapshot.nope") }""", "t", keys, prefixes, true).Count != 1)
+        throw new Exception("未抓出表头映射里不存在的 key（宽松遍必须覆盖）");
+    if (FindUnknownI18nKeys("""var u = "application/json";""", "t", keys, prefixes, true).Count != 0)
+        throw new Exception("误报：普通字符串（含 /）不应被当成 key");
+    if (FindUnknownI18nKeys("""var h = "/_cat/nodes?h=node.role,master";""", "t", keys, prefixes, true).Count != 0)
+        throw new Exception("误报：URL 查询串里的 node.role 不是 key");
+    if (FindUnknownI18nKeys("""var f = "config.json";""", "t", keys, prefixes, true).Count != 0)
+        throw new Exception("误报：文件名不该被当成 key（宽松遍只扫 WPF 工程）");
+
+    if (!ComboTemplateHasEditableBox(
+            """<ControlTemplate TargetType="ComboBox"><TextBox x:Name="PART_EditableTextBox" /></ControlTemplate>"""))
+        throw new Exception("未识别已存在的 PART_EditableTextBox");
+    if (ComboTemplateHasEditableBox(
+            """<ControlTemplate TargetType="ComboBox"><ContentPresenter /></ControlTemplate>"""))
+        throw new Exception("未抓出缺失的 PART_EditableTextBox");
+});
+
 Console.WriteLine();
 Console.WriteLine($"===== 结果：通过 {passed}，失败 {failed} =====");
 if (failed > 0)

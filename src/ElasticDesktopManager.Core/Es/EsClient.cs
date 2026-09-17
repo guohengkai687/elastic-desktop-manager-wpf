@@ -80,6 +80,9 @@ public sealed partial class EsClient : IDisposable
     public const string IndicesFormat =
         "/_cat/indices?format=json&h=index,health,pri,rep,docs.count,status,tm,uuid,store.size,memory.total,creation.date";
 
+    /// <summary>只取索引名的瘦查询串（搜索页索引下拉用：响应体小、解析只需一个字段）。</summary>
+    public const string IndexNamesFormat = "/_cat/indices?format=json&h=index";
+
     /// <summary>索引列表（format 为 _cat/indices 查询串，如 EsClient.IndicesFormat）。</summary>
     public Task<string> GetIndicesAsync(string format, CancellationToken ct = default)
         => ExecuteAsync("GET", format.StartsWith("/") ? format : "/" + format, null, _timeout, ct);

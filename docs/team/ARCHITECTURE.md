@@ -201,7 +201,7 @@ Common 用 `StaticResource` 引用令牌，令牌字典必须先合并，否则�
   Mapping/Settings 提取、Reindex/别名非法 JSON 统一抛 `EsException`。
 - 结果：**99 通过 / 0 失败**。
 
-### 静态守卫（`tests/binding-guard`，13 项）
+### 静态守卫（`tests/binding-guard`，16 项）
 | 规则 | 防的问题 |
 |---|---|
 | 只读属性 + 默认 TwoWay 目标 | `TextBox.Text` 等绑 `private set` → **运行期抛异常、编译零错误** |
@@ -214,7 +214,9 @@ Common 用 `StaticResource` 引用令牌，令牌字典必须先合并，否则�
 | 资源引用不得嵌在字符串中 | `Margin="0,{StaticResource S},0,0"` → XAML 当字面量 → 运行期转换失败 |
 | **被 XAML 绑定的只读派生属性必须有 PropertyChanged 通知** | 漏通知 → 按钮永久禁用（第 3 轮的真实缺陷） |
 | **不得用字面量下标增删 MergedDictionaries** | 合并顺序一变就拆掉控件模板（第 3 轮"UI 变回旧样子"的根因） |
-| 守卫自检（3 条） | **假绿**：规则失效却仍显示 PASS |
+| **可编辑 ComboBox 模板必须含 `PART_EditableTextBox`** | 模板缺部件 → WPF 进不了编辑态，下拉不可用（第 4 轮的真实缺陷） |
+| **代码里用到的 i18n key 必须存在** | 漏词条 → 界面直接显示 `common.save` 这种 key（第 4 轮发现 2 处历史遗留） |
+| 守卫自检（4 条） | **假绿**：规则失效却仍显示 PASS |
 
 **关键设计：守卫必须"能失败"**。每条新规则都配自检喂违规样本；本轮还修掉了一个真实误报（见下）。
 
@@ -266,6 +268,41 @@ Common 用 `StaticResource` 引用令牌，令牌字典必须先合并，否则�
 
 ---
 
+## ADR-9：窗口背景必须由显式样式提供（隐式样式不作用于派生窗口）
+
+**决策**：把原来的隐式 `<Style TargetType="Window">` 改成带 key 的 `WindowBaseStyle`，每个窗口根元素显式
+`Style="{StaticResource WindowBaseStyle}"`；`MainWindow` 另外再直写一次 `Background`（双保险）。
+
+**背景（真实缺陷）**：深色主题下整个页面区是白底、文字几乎不可读。根因不是色板写错，而是
+**WPF 的隐式样式按控件具体类型查资源**：`TargetType="Window"` 的隐式样式不会作用到
+`MainWindow : Window` / `SettingsWindow : Window` 这些派生类（[dotnet/wpf#10461](https://github.com/dotnet/wpf/issues/10461)），
+于是客户区一直停在默认的 `SystemColors.WindowBrush`（系统浅色下正好是白色）。
+浅色主题下"白底"恰好正确，所以这个缺陷能一直藏着 —— **只有在深色主题下才暴露**。
+
+**为什么难发现**：导航栏/顶栏/状态栏/卡片都各自设了 `SurfaceBrush`，只有页面容器是透明的，
+所以"除页面底色外全是深色"这种半对半错的样子极容易被误判成"色板配错"。
+
+**测试**：本机跑不了 WPF，无法用运行时断言；改成"每个窗口显式引用样式"这一可静态检查的形态，
+并由 `Window` 家族（11 个窗口）统一遵守。
+
+---
+
+## ADR-10：展示文本的本地化边界（Core 解析器可以直接用 Localization）
+
+**决策**：需要"拼成一句话"的展示文本（分片统计、保留策略、SLM 统计）在 Core 解析器里用
+`Localization.L(...)` 组装，其余文案仍由视图/VM 层负责。
+
+**背景**：`DataGrid` 是按行绑定**模型属性**的，VM 无法逐行格式化；若在 Core 里写死英文，
+中文界面就会出现 "2/2 · 1 failed" 这类半截英文（历史遗留）。`Localization` 本来就位于 Core，
+调用它不违反"Core 不依赖 UI"的约束。
+
+**代价**：解析结果的语言随当前语言设置变化 → 单测断言只针对数值片段（如 `Contains(text, "30d")`），
+不做整句字面量比对，避免语言相关断言。
+
+**边界**：路径、字段名、`_cat` 返回的原始字段（如 `node.role`）不翻译，它们本就是 ES 的术语。
+
+---
+
 ## 风险登记（按严重度）
 
 | # | 风险 | 缓解 |
@@ -282,10 +319,17 @@ Common 用 `StaticResource` 引用令牌，令牌字典必须先合并，否则�
 | R10 | **派生属性漏发通知**：界面永久停在旧值（第 3 轮连接按钮的真实缺陷），编译与运行均不报错 | 守卫「只读派生属性必须有 PropertyChanged」规则 + 负向验证；所有依赖 Selected 一类可变状态的派生属性都在 setter 里显式通知 |
 | R11 | **按固定下标操作资源字典**：合并顺序一变就拆掉样式（第 3 轮"UI 变回旧样子"） | ThemeService 改为按 Source 识别；守卫禁止 `MergedDictionaries` 字面量下标 |
 | R12 | 矢量图标路径写错 → 运行期 `Geometry.Parse` 抛异常（本机无法验证渲染） | 图标数据放 Core + 测试逐条校验语法/坐标；开发期用 Python 渲染 PNG 做肉眼复核 |
+| R13 | **窗口用隐式样式**：`TargetType="Window"` 不作用于派生窗口 → 客户区停在系统白底（深色主题下刺眼；**已发生**） | ADR-9：`WindowBaseStyle` 显式引用；MainWindow 直写 `Background` |
+| R14 | **可编辑 ComboBox 缺模板部件**：`IsEditable="True"` 但模板无 `PART_EditableTextBox` → 下拉不可用（**已发生**） | 守卫「可编辑 ComboBox 模板」规则；唯一可编辑下拉单点覆盖 |
+| R15 | **i18n key 漏定义**：界面直接显示 `common.save` 这类 key（**已发生 2 处**） | 守卫「代码里的 key 必须存在」规则（调用点精确遍 + WPF 工程字面量宽松遍） |
 
 ## 未完成 / 后续批次（如实声明）
 
 - **A10**：索引数据导出 JSON（带 DSL 过滤）、本地 JSON 批量导入 `_bulk` —— Core 未实现，UI 未接入。
 - **B6**：连接管理页的卡片化（悬停抬升 + 状态徽章）—— 未做，现为树形列表（保留文件夹层级）。
-- **快照/SLM、ILM、文档完整 CRUD**：属大块功能，列为后续批次。
+- ~~**快照/SLM、ILM**~~：第 4 轮已实现（快照页五个列表，见 ADR-10 与 ARCHITECTURE 的 A10b/A10c）。
+- **ILM 的 start/stop 与运行状态**：`_ilm/start|_ilm/stop|_ilm/status` 未接入 UI（本轮只做"五个列表"范围内的策略 CRUD）。
+  为避免留死代码，对应客户端方法在交付前**已删除**；需要时再加。
+- **快照仓库的 S3/GCS/Azure 校验**：类型下拉已支持，但设置项只提供 location/compress（其余需手写 JSON）。
+- **文档（documents）完整 CRUD**：仍为后续批次。
 - 逐条指标中文说明表：见 ADR-1 取舍。

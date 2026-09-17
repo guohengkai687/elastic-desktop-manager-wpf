@@ -1,7 +1,8 @@
 <UserControl x:Class="ElasticDesktopManager.Views.SearchView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:views="clr-namespace:ElasticDesktopManager.Views">
+             xmlns:views="clr-namespace:ElasticDesktopManager.Views"
+             xmlns:icons="clr-namespace:ElasticDesktopManager.Services">
     <Grid Margin="18">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -27,6 +28,13 @@
                     <ComboBox Width="250" IsEditable="True" IsTextSearchEnabled="True"
                               ItemsSource="{Binding Indices}"
                               Text="{Binding SelectedIndex, UpdateSourceTrigger=PropertyChanged}" />
+                    <Button Style="{StaticResource IconButtonStyle}" Margin="2,0,0,0"
+                            ToolTip="{Binding IndexHint, Mode=OneWay}"
+                            Command="{Binding RefreshIndicesCommand}">
+                        <Path Style="{StaticResource IconPathSmallStyle}"
+                              Data="{x:Static icons:AppIconGeometries.Refresh}"
+                              Stroke="{DynamicResource TextSecondaryBrush}" />
+                    </Button>
                     <TextBlock Margin="8,0,0,0" VerticalAlignment="Center" FontSize="11"
                                MaxWidth="220" TextTrimming="CharacterEllipsis"
                                Foreground="{DynamicResource TextSecondaryBrush}"

@@ -2,7 +2,8 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="About" Width="460" SizeToContent="Height"
-        WindowStartupLocation="CenterOwner" ShowInTaskbar="False" ResizeMode="NoResize">
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False" ResizeMode="NoResize"
+        Style="{StaticResource WindowBaseStyle}">
     <StackPanel Margin="28,24">
         <StackPanel Orientation="Horizontal">
             <Border Width="52" Height="52" CornerRadius="10" Background="{DynamicResource AccentBrush}">

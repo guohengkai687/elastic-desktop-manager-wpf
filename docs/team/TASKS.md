@@ -146,3 +146,33 @@
 - [ ] 快照的 SLM 策略（`_slm/policy`）、ILM、索引数据导出/导入（A10）未做。
 - [ ] 未在本机运行 GUI 验证（Linux 无 WPF）；主题切换、图标渲染、两套性格差异需在 Windows 上复验
       （见 QA.md 第 11-14 条）。
+
+---
+
+## 第 4 轮（用户 3 项要求）
+
+### 已完成
+
+- [x] 修复深色主题**页面区白底**：隐式 `TargetType="Window"` 样式对派生窗口不生效（dotnet/wpf#10461）→
+      抽出带 key 的 `WindowBaseStyle`，**11 个窗口**（MainWindow + 10 个弹窗）显式引用；MainWindow 另直写 `Background`
+- [x] 修复搜索页**索引下拉无数据**：ComboBox 模板补 `PART_EditableTextBox` + `IsEditable` 触发器；
+      同时删掉会与 `IsOpen` 绑定打架的 `HasItems=False → 强制关 Popup` 触发器
+- [x] 索引列表加载改为**不静默**：显示「N 个索引 / 该集群没有索引 / 错误原因」，并新增下拉旁的手动刷新按钮；
+      解析逻辑下沉到 Core（`ParseIndexNames` + `EsClient.IndexNamesFormat`）以便单测
+- [x] 快照页重构为 **5 个页签**：仓库管理 / 快照管理 / 快照恢复 / 自动策略 SLM / 生命周期 ILM
+- [x] Core 新增端点：`/_slm/policy`（列出/新建/删除/立即执行）、`/_ilm/policy`（列出/新建/删除）、
+      `GET /_recovery?active_only=true`、`GET /_snapshot/{repo}/{snap}`；恢复支持 `rename_pattern`/`rename_replacement`
+- [x] Core 新增解析器与模型：`EsSlmPolicy`、`EsIlmPolicy`、`EsRecoveryShard`（含 7.x 对象 / 8.x 字符串双形态兼容）
+- [x] 每页签**独立状态行**（`TabStatus`：正常次要色 / 错误危险色），SLM/ILM 不支持的集群只在对应页签内报错
+- [x] i18n 新增 88 个词条（zh/en 严格对齐，守卫强制）
+- [x] 守卫 13 → **16 项**：可编辑 ComboBox 部件、i18n key 存在性（两遍扫描），均做负向验证；
+      新规则**发现并修复 2 处历史遗留**（`common.save` / `common.add` 从未定义）
+- [x] 测试 96 → **102**：索引名解析、SLM/ILM/恢复端点契约、恢复重命名、SLM 解析、ILM 解析、恢复进度解析
+- [x] 文档更新（README / ARCHITECTURE ADR-9·ADR-10·R13-R15 / QA 第 4 轮 / 本文件）
+
+### 未做（如实声明）
+
+- [ ] ILM 的 `start`/`stop`/`status`、SLM 调度器状态未接入 UI（客户端方法已一并删除，不留死代码）。
+- [ ] 快照仓库类型下拉支持 s3/gcs/azure，但设置项只有 location/compress（其余需手写 JSON）。
+- [ ] 未能确认第 1、2 项修复在真机上的视觉/交互效果：Linux 无 WPF，需在 Windows 上复验 QA.md 第 15-19 条。
+- [ ] `_cat/nodes` 等 URL 里的 `node.role` 这类字段名不做本地化（ES 术语，见 ADR-10 边界）。

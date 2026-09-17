@@ -222,17 +222,30 @@ public sealed partial class EsClient
     /// <summary>
     /// POST /_snapshot/{repository}/{snapshot}/_restore —— 恢复到当前集群。
     /// 同样用 wait_for_completion=false；恢复到已存在的同名索引会失败（由 ES 校验）。
+    /// renamePattern/renameReplacement 用于把恢复出来的索引改名，避免覆盖线上同名索引。
     /// </summary>
     public Task<string> RestoreSnapshotAsync(string repository, string snapshot, string? indices = null,
-        bool includeGlobalState = false, CancellationToken ct = default)
+        bool includeGlobalState = false, string? renamePattern = null, string? renameReplacement = null,
+        CancellationToken ct = default)
     {
         string path = $"/_snapshot/{Uri.EscapeDataString(repository)}/{Uri.EscapeDataString(snapshot)}/_restore"
                       + "?wait_for_completion=false";
-        return ExecuteAsync("POST", path, SnapshotBody(indices, includeGlobalState), _sqlTimeout, ct);
+        return ExecuteAsync("POST", path,
+            SnapshotBody(indices, includeGlobalState, renamePattern, renameReplacement), _sqlTimeout, ct);
     }
 
+    /// <summary>GET /_snapshot/{repository}/{snapshot} —— 单个快照的完整定义（详情 JSON）。</summary>
+    public Task<string> GetSnapshotDetailAsync(string repository, string snapshot, CancellationToken ct = default)
+        => ExecuteAsync("GET",
+            $"/_snapshot/{Uri.EscapeDataString(repository)}/{Uri.EscapeDataString(snapshot)}", null, _timeout, ct);
+
+    /// <summary>GET /_recovery?active_only=true —— 正在进行的恢复（快照恢复 / 分片迁移）进度。</summary>
+    public Task<string> GetRecoveryStatusAsync(CancellationToken ct = default)
+        => ExecuteAsync("GET", "/_recovery?active_only=true&format=json", null, _timeout, ct);
+
     /// <summary>快照/恢复共用的 body：索引为空视为全部（*）。</summary>
-    private static string SnapshotBody(string? indices, bool includeGlobalState)
+    private static string SnapshotBody(string? indices, bool includeGlobalState,
+        string? renamePattern = null, string? renameReplacement = null)
     {
         var body = new JsonObject
         {
@@ -240,8 +253,43 @@ public sealed partial class EsClient
             ["ignore_unavailable"] = true,
             ["include_global_state"] = includeGlobalState,
         };
+        // 只有真正填了才带上：空字符串会被 ES 当成"把所有索引都匹配一遍"的非法正则。
+        if (!string.IsNullOrWhiteSpace(renamePattern)) body["rename_pattern"] = renamePattern.Trim();
+        if (!string.IsNullOrWhiteSpace(renameReplacement)) body["rename_replacement"] = renameReplacement.Trim();
         return body.ToJsonString();
     }
+
+    // ================= A10b SLM 自动快照策略 =================
+
+    /// <summary>GET /_slm/policy —— 全部自动快照策略（x-pack）。</summary>
+    public Task<string> GetSlmPoliciesAsync(CancellationToken ct = default)
+        => ExecuteAsync("GET", "/_slm/policy", null, _timeout, ct);
+
+    /// <summary>PUT /_slm/policy/{policyId} —— 创建/更新策略；body 必须含 schedule 与 repository。</summary>
+    public Task<string> CreateSlmPolicyAsync(string policyId, string bodyJson, CancellationToken ct = default)
+        => ExecuteAsync("PUT", "/_slm/policy/" + Uri.EscapeDataString(policyId), bodyJson, _sqlTimeout, ct);
+
+    /// <summary>DELETE /_slm/policy/{policyId}</summary>
+    public Task<string> DeleteSlmPolicyAsync(string policyId, CancellationToken ct = default)
+        => ExecuteAsync("DELETE", "/_slm/policy/" + Uri.EscapeDataString(policyId), null, _sqlTimeout, ct);
+
+    /// <summary>POST /_slm/policy/{policyId}/_execute —— 立即执行一次策略（不影响后续调度）。</summary>
+    public Task<string> ExecuteSlmPolicyAsync(string policyId, CancellationToken ct = default)
+        => ExecuteAsync("POST", "/_slm/policy/" + Uri.EscapeDataString(policyId) + "/_execute", null, _sqlTimeout, ct);
+
+    // ================= A10c ILM 生命周期策略 =================
+
+    /// <summary>GET /_ilm/policy —— 全部生命周期策略（x-pack）。</summary>
+    public Task<string> GetIlmPoliciesAsync(CancellationToken ct = default)
+        => ExecuteAsync("GET", "/_ilm/policy", null, _timeout, ct);
+
+    /// <summary>PUT /_ilm/policy/{policyId} —— 创建/更新策略；body 为完整的 { "policy": { "phases": {...} } }。</summary>
+    public Task<string> CreateIlmPolicyAsync(string policyId, string bodyJson, CancellationToken ct = default)
+        => ExecuteAsync("PUT", "/_ilm/policy/" + Uri.EscapeDataString(policyId), bodyJson, _sqlTimeout, ct);
+
+    /// <summary>DELETE /_ilm/policy/{policyId}</summary>
+    public Task<string> DeleteIlmPolicyAsync(string policyId, CancellationToken ct = default)
+        => ExecuteAsync("DELETE", "/_ilm/policy/" + Uri.EscapeDataString(policyId), null, _sqlTimeout, ct);
 
     // ================= 工具 =================
 

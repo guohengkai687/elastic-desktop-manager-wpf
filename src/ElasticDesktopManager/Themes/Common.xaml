@@ -12,7 +12,15 @@
 
     <!-- ================= 基础 ================= -->
 
-    <Style TargetType="Window">
+    <!--
+      ⚠️ 窗口基样式**必须带 key 并显式套用**，不能指望隐式样式。
+      WPF 的隐式样式按“元素的具体类型”查资源：TargetType="Window" 的隐式样式
+      不会作用到 MainWindow / SettingsWindow 等派生窗口（dotnet/wpf#10461）。
+      后果：窗口客户区一直停在默认的 SystemColors.WindowBrush（浅色系统下正好是白色，
+      所以浅色主题看不出来；深色主题下页面区就是一大片白底）。
+      各窗口的根元素都要写 Style="{StaticResource WindowBaseStyle}"。
+    -->
+    <Style x:Key="WindowBaseStyle" TargetType="Window">
         <Setter Property="Background" Value="{DynamicResource WindowBackgroundBrush}" />
         <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
         <Setter Property="FontFamily" Value="Segoe UI, Microsoft YaHei UI, sans-serif" />
@@ -330,6 +338,29 @@
         </Setter>
     </Style>
 
+    <!--
+      可编辑 ComboBox 的输入框样式。
+      ⚠️ 必须给 PART_EditableTextBox 指定一个"没有边框/背景"的样式：
+      否则隐式 TextBox 样式会给它套上自己的外框，看起来像下拉框里又嵌了一个输入框。
+    -->
+    <Style x:Key="ComboEditableTextBoxStyle" TargetType="TextBox">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+        <Setter Property="CaretBrush" Value="{DynamicResource TextPrimaryBrush}" />
+        <Setter Property="SelectionBrush" Value="{DynamicResource AccentBrush}" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TextBox">
+                    <ScrollViewer x:Name="PART_ContentHost" Focusable="False"
+                                  HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Hidden" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <Style TargetType="ComboBox">
         <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
         <Setter Property="MinHeight" Value="{DynamicResource ControlHeight}" />
@@ -371,6 +402,17 @@
                                           Margin="10,0,28,0" VerticalAlignment="Center"
                                           HorizontalAlignment="Left" />
 
+                        <!--
+                          ⚠️ 可编辑模式（IsEditable=True）必须提供名为 PART_EditableTextBox 的 TextBox：
+                          这是 ComboBox 的模板契约，缺了它 WPF 无法进入编辑态
+                          （搜索页的索引下拉正是唯一一个可编辑 ComboBox）。
+                          右侧留 28px 不覆盖，保证还能点到箭头按钮展开列表。
+                        -->
+                        <TextBox x:Name="PART_EditableTextBox" Visibility="Collapsed"
+                                 Style="{StaticResource ComboEditableTextBoxStyle}"
+                                 Margin="10,0,28,0" VerticalAlignment="Center"
+                                 IsReadOnly="{TemplateBinding IsReadOnly}" />
+
                         <Popup x:Name="PART_Popup" AllowsTransparency="True" Focusable="False"
                                PopupAnimation="Fade" Placement="Bottom"
                                IsOpen="{TemplateBinding IsDropDownOpen}">
@@ -390,9 +432,17 @@
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value="0.5" />
                         </Trigger>
-                        <Trigger Property="HasItems" Value="False">
-                            <Setter TargetName="PART_Popup" Property="IsOpen" Value="False" />
+                        <!-- 可编辑模式：显示输入框、隐藏只读展示区（两者重叠在同一格） -->
+                        <Trigger Property="IsEditable" Value="True">
+                            <Setter TargetName="PART_EditableTextBox" Property="Visibility" Value="Visible" />
+                            <Setter TargetName="content" Property="Visibility" Value="Collapsed" />
                         </Trigger>
+                        <!--
+                          这里原来有一条 HasItems=False → 强制关闭 Popup 的触发器，已删除：
+                          它会在"列表还没加载完"时把 IsOpen 按回去，与 IsOpen 的绑定互相打架，
+                          表现就是"点了没反应 / 展开是空的"。空列表本来就是合法状态，
+                          由页面上的提示文字说明即可。
+                        -->
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
@@ -910,6 +960,44 @@
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
         <Setter Property="Margin" Value="0,6,0,0" />
+    </Style>
+
+    <!--
+      页签状态行：正常时次要色，出错时危险色。
+      DataContext 由使用处设为 TabStatus，绑定 IsError 触发变色。
+    -->
+    <Style x:Key="StatusLineStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="{StaticResource FontXs}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding IsError}" Value="True">
+                <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- 详情条：选中行的 JSON / 摘要 -->
+    <Style x:Key="DetailBoxStyle" TargetType="TextBox">
+        <Setter Property="IsReadOnly" Value="True" />
+        <Setter Property="Background" Value="{DynamicResource SurfaceAltBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+        <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+        <Setter Property="FontSize" Value="{StaticResource FontXs}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="8,6" />
+        <Setter Property="TextWrapping" Value="NoWrap" />
+        <Setter Property="HorizontalScrollBarVisibility" Value="Auto" />
+        <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
+    </Style>
+
+    <!-- 表单/详情里的字段标注 -->
+    <Style x:Key="FieldLabelStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="{StaticResource FontXs}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+        <Setter Property="Margin" Value="0,0,0,3" />
     </Style>
 
     <!-- 导航分组标题：小号、次要色，不可交互 -->

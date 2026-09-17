@@ -1,4 +1,5 @@
 using System.Text.Json;
+using ElasticDesktopManager.Core.I18n;
 using ElasticDesktopManager.Core.Json;
 using ElasticDesktopManager.Core.Models;
 
@@ -351,7 +352,11 @@ public static class EsParsers
         if (total <= 0) return "";
         long ok = GetLong(sh, "successful");
         long failed = GetLong(sh, "failed");
-        return failed > 0 ? $"{ok}/{total} · {failed} failed" : $"{ok}/{total}";
+        // 分片统计要拼成一句话展示，而 DataGrid 是按行绑定模型属性的，VM 无法逐行格式化，
+        // 因此这里直接用 Core 自带的 Localization（Core 自己的词典，不引入任何 UI 依赖）。
+        return failed > 0
+            ? Localization.L("snapshot.shards.failed", ok, total, failed)
+            : $"{ok}/{total}";
     }
 
     private static string ParseSnapshotFailures(JsonElement el)
@@ -392,4 +397,257 @@ public static class EsParsers
 
     private static double GetDouble(JsonElement el, string name)
         => el.TryGetProperty(name, out var p) && p.ValueKind == JsonValueKind.Number ? p.GetDouble() : 0;
+
+    // ================= 索引名列表（搜索页下拉） =================
+
+    /// <summary>
+    /// 解析 _cat/indices?format=json&amp;h=index 的响应（数组，每项形如 {"index":"logs-0001"}）。
+    /// 与 <see cref="ParseIndices"/> 分开：这里只关心名字，容忍只有 index 一个字段的瘦响应。
+    /// </summary>
+    public static List<string> ParseIndexNames(string json)
+    {
+        var list = new List<string>();
+        using var doc = JsonDocument.Parse(json);
+        if (doc.RootElement.ValueKind != JsonValueKind.Array) return list;
+
+        foreach (var el in doc.RootElement.EnumerateArray())
+        {
+            string name = JsonHelper.GetString(el, "index");
+            if (!string.IsNullOrEmpty(name)) list.Add(name);
+        }
+        return list;
+    }
+
+    // ================= SLM 自动快照策略 =================
+
+    /// <summary>
+    /// 解析 GET /_slm/policy：<c>{ "&lt;policyId&gt;": { "policy": {...}, "last_success": ..., "stats": {...} } }</c>
+    /// 兼容 7.x（last_success 是对象、next_execution_millis 是毫秒）与 8.x（ISO 字符串）。
+    /// </summary>
+    public static List<EsSlmPolicy> ParseSlmPolicies(string json)
+    {
+        var list = new List<EsSlmPolicy>();
+        using var doc = JsonDocument.Parse(json);
+        if (doc.RootElement.ValueKind != JsonValueKind.Object) return list;
+
+        foreach (var prop in doc.RootElement.EnumerateObject())
+        {
+            var el = prop.Value;
+            if (el.ValueKind != JsonValueKind.Object) continue;
+
+            JsonElement pol = default;
+            bool hasPolicy = el.TryGetProperty("policy", out pol) && pol.ValueKind == JsonValueKind.Object;
+
+            var item = new EsSlmPolicy
+            {
+                PolicyId = prop.Name,
+                PolicyJson = hasPolicy ? JsonHelper.Pretty(pol.GetRawText()) : JsonHelper.Pretty(el.GetRawText()),
+            };
+
+            if (hasPolicy)
+            {
+                item.SnapshotNameTemplate = JsonHelper.GetString(pol, "name");
+                item.Schedule = JsonHelper.GetString(pol, "schedule");
+                item.Repository = JsonHelper.GetString(pol, "repository");
+                item.Indices = ParseNameArray(pol, "config", "indices");
+                item.RetentionText = ParseRetention(pol);
+            }
+
+            item.NextExecution = TimestampOf(el, "next_execution_millis", "next_execution");
+            item.LastSuccess = ParseRunInfo(el, "last_success");
+            item.LastFailure = ParseRunInfo(el, "last_failure");
+            item.StatsText = ParseSlmStats(el);
+
+            list.Add(item);
+        }
+        return list.OrderBy(x => x.PolicyId, StringComparer.Ordinal).ToList();
+    }
+
+    /// <summary>解析策略的 retention（expire_after / min_count / max_count）为一行摘要。</summary>
+    private static string ParseRetention(JsonElement policy)
+    {
+        if (!policy.TryGetProperty("retention", out var r) || r.ValueKind != JsonValueKind.Object) return "";
+
+        var parts = new List<string>();
+        string expire = JsonHelper.GetString(r, "expire_after");
+        if (!string.IsNullOrEmpty(expire)) parts.Add(Localization.L("snapshot.retention.expire", expire));
+        int min = GetInt(r, "min_count");
+        int max = GetInt(r, "max_count");
+        if (min > 0 || max > 0)
+        {
+            parts.Add(Localization.L("snapshot.retention.keep",
+                min > 0 ? min.ToString() : "*", max > 0 ? max.ToString() : "*"));
+        }
+        return string.Join(" · ", parts);
+    }
+
+    /// <summary>last_success / last_failure：7.x 是对象，8.x 是 ISO 字符串，两种都要能显示。</summary>
+    private static string ParseRunInfo(JsonElement el, string name)
+    {
+        if (!el.TryGetProperty(name, out var v)) return "";
+        if (v.ValueKind == JsonValueKind.String) return FormatIsoDate(v.GetString());
+        if (v.ValueKind != JsonValueKind.Object) return "";
+
+        var parts = new List<string>();
+        string when = TimestampOf(v, "time", "time_millis");
+        if (!string.IsNullOrEmpty(when)) parts.Add(when);
+        string snap = JsonHelper.GetString(v, "snapshot_name");
+        if (!string.IsNullOrEmpty(snap)) parts.Add(snap);
+        string details = JsonHelper.GetString(v, "details");
+        if (string.IsNullOrEmpty(details))
+        {
+            // 只有失败态才带 reason 字段
+            var reason = v.TryGetProperty("reason", out var rs) && rs.ValueKind == JsonValueKind.String
+                ? rs.GetString()! : "";
+            details = reason;
+        }
+        if (!string.IsNullOrEmpty(details)) parts.Add(details);
+        return string.Join(" · ", parts);
+    }
+
+    private static string ParseSlmStats(JsonElement el)
+    {
+        if (!el.TryGetProperty("stats", out var s) || s.ValueKind != JsonValueKind.Object) return "";
+        var parts = new List<string>();
+        long taken = GetLong(s, "snapshots_taken");
+        long failed = GetLong(s, "snapshots_failed");
+        long deleted = GetLong(s, "snapshots_deleted");
+        if (taken > 0) parts.Add(Localization.L("snapshot.stats.taken", taken));
+        if (failed > 0) parts.Add(Localization.L("snapshot.stats.failed", failed));
+        if (deleted > 0) parts.Add(Localization.L("snapshot.stats.deleted", deleted));
+        return string.Join(" · ", parts);
+    }
+
+    /// <summary>取毫秒时间戳字段或 ISO 字符串字段，统一成本地时间；都取不到返回空串。</summary>
+    private static string TimestampOf(JsonElement el, string millisName, string isoName)
+    {
+        long millis = GetLong(el, millisName);
+        if (millis > 0) return FormatEpochMillis(millis);
+        string iso = JsonHelper.GetString(el, isoName);
+        return FormatIsoDate(iso);
+    }
+
+    /// <summary>ISO-8601 → 本地时间；解析失败时原样返回（宁可显示原值，也不要空）。</summary>
+    private static string FormatIsoDate(string? iso)
+    {
+        if (string.IsNullOrWhiteSpace(iso)) return "";
+        if (DateTimeOffset.TryParse(iso, System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AssumeUniversal, out var dto))
+        {
+            return dto.ToLocalTime()
+                .ToString("yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
+        }
+        return iso;
+    }
+
+    // ================= ILM 生命周期策略 =================
+
+    /// <summary>解析 GET /_ilm/policy：<c>{ "&lt;policyId&gt;": { "policy": { "phases": {...} }, "in_use_by": {...} } }</c></summary>
+    public static List<EsIlmPolicy> ParseIlmPolicies(string json)
+    {
+        var list = new List<EsIlmPolicy>();
+        using var doc = JsonDocument.Parse(json);
+        if (doc.RootElement.ValueKind != JsonValueKind.Object) return list;
+
+        foreach (var prop in doc.RootElement.EnumerateObject())
+        {
+            var el = prop.Value;
+            if (el.ValueKind != JsonValueKind.Object) continue;
+
+            var item = new EsIlmPolicy
+            {
+                PolicyId = prop.Name,
+                ModifiedDate = FormatIsoDate(JsonHelper.GetString(el, "modified_date")),
+                PolicyJson = JsonHelper.Pretty(el.GetRawText()),
+            };
+
+            if (el.TryGetProperty("policy", out var pol) && pol.ValueKind == JsonValueKind.Object &&
+                pol.TryGetProperty("phases", out var phases) && phases.ValueKind == JsonValueKind.Object)
+            {
+                var names = new List<string>();
+                foreach (var ph in phases.EnumerateObject()) names.Add(ph.Name);
+                item.PhaseCount = names.Count;
+                item.PhasesText = string.Join(" → ", names);
+            }
+
+            if (el.TryGetProperty("in_use_by", out var use) && use.ValueKind == JsonValueKind.Object &&
+                use.TryGetProperty("indices", out var idx) && idx.ValueKind == JsonValueKind.Array)
+            {
+                var names = new List<string>();
+                foreach (var i in idx.EnumerateArray())
+                    if (i.ValueKind == JsonValueKind.String) names.Add(i.GetString()!);
+                item.IndicesInUseCount = names.Count;
+                item.IndicesInUse = string.Join(", ", names);
+            }
+
+            list.Add(item);
+        }
+        return list.OrderBy(x => x.PolicyId, StringComparer.Ordinal).ToList();
+    }
+
+    /// <summary>解析 GET /_recovery：<c>{ "&lt;index&gt;": { "shards": [ ... ] } }</c> → 每个分片一行。</summary>
+    public static List<EsRecoveryShard> ParseRecovery(string json)
+    {
+        var list = new List<EsRecoveryShard>();
+        using var doc = JsonDocument.Parse(json);
+        if (doc.RootElement.ValueKind != JsonValueKind.Object) return list;
+
+        foreach (var prop in doc.RootElement.EnumerateObject())
+        {
+            if (!prop.Value.TryGetProperty("shards", out var shards) || shards.ValueKind != JsonValueKind.Array)
+                continue;
+
+            foreach (var sh in shards.EnumerateArray())
+            {
+                if (sh.ValueKind != JsonValueKind.Object) continue;
+                var row = new EsRecoveryShard
+                {
+                    Index = prop.Name,
+                    Shard = GetLong(sh, "id").ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    Stage = JsonHelper.GetString(sh, "stage"),
+                    Type = JsonHelper.GetString(sh, "type"),
+                    Source = HostOf(sh, "source"),
+                    Target = HostOf(sh, "target"),
+                };
+
+                if (sh.TryGetProperty("index", out var idx) && idx.ValueKind == JsonValueKind.Object)
+                {
+                    if (idx.TryGetProperty("files", out var f) && f.ValueKind == JsonValueKind.Object)
+                        row.FilesPercent = JsonHelper.GetString(f, "percent");
+                    if (idx.TryGetProperty("size", out var s) && s.ValueKind == JsonValueKind.Object)
+                    {
+                        long rec = GetLong(s, "recovered_in_bytes");
+                        long total = GetLong(s, "total_in_bytes");
+                        row.BytesText = total > 0
+                            ? $"{EsMetricsFlattener.FormatBytes(rec)} / {EsMetricsFlattener.FormatBytes(total)}"
+                            : EsMetricsFlattener.FormatBytes(rec);
+                    }
+                }
+
+                long ms = GetLong(sh, "total_time_in_millis");
+                row.TimeText = ms > 0 ? EsMetricsFlattener.FormatDuration(ms) : "";
+                list.Add(row);
+            }
+        }
+        return list;
+    }
+
+    private static string HostOf(JsonElement shard, string side)
+    {
+        if (!shard.TryGetProperty(side, out var s) || s.ValueKind != JsonValueKind.Object) return "";
+        string host = JsonHelper.GetString(s, "host");
+        if (!string.IsNullOrEmpty(host)) return host;
+        return JsonHelper.GetString(s, "name");
+    }
+
+    /// <summary>取 obj[a][b] 里的字符串数组并拼接（缺失返回空串）。</summary>
+    private static string ParseNameArray(JsonElement obj, string a, string b)
+    {
+        if (!obj.TryGetProperty(a, out var inner) || inner.ValueKind != JsonValueKind.Object) return "";
+        if (!inner.TryGetProperty(b, out var arr) || arr.ValueKind != JsonValueKind.Array) return "";
+        var names = new List<string>();
+        foreach (var item in arr.EnumerateArray())
+            if (item.ValueKind == JsonValueKind.String) names.Add(item.GetString()!);
+        return string.Join(", ", names);
+    }
 }

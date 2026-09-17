@@ -6,7 +6,9 @@
         Title="Elastic Desktop Manager"
         Height="880" Width="1440" MinHeight="700" MinWidth="1160"
         WindowStartupLocation="CenterScreen"
-        Closing="OnClosing">
+        Closing="OnClosing"
+        Style="{StaticResource WindowBaseStyle}"
+        Background="{DynamicResource WindowBackgroundBrush}">
     <Grid x:Name="RootGrid">
         <Grid.RowDefinitions>
             <RowDefinition Height="{StaticResource TitleBarHeight}" />

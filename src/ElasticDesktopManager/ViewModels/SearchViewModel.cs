@@ -113,6 +113,9 @@ public class SearchViewModel : PageViewModelBase
     public AsyncRelayCommand UpdateByQueryCommand { get; }
     public ICommand ClearResultsCommand { get; }
 
+    /// <summary>手动重载索引下拉（失败时弹错误框，便于排查为什么列表是空的）。</summary>
+    public AsyncRelayCommand RefreshIndicesCommand { get; }
+
     public SearchViewModel()
     {
         RunCommand = new AsyncRelayCommand(_ => RunSearchAsync());
@@ -126,6 +129,7 @@ public class SearchViewModel : PageViewModelBase
         DeleteByQueryCommand = new AsyncRelayCommand(_ => ModifyByQueryAsync(isUpdate: false));
         UpdateByQueryCommand = new AsyncRelayCommand(_ => ModifyByQueryAsync(isUpdate: true));
         ClearResultsCommand = new RelayCommand(_ => ClearResults());
+        RefreshIndicesCommand = new AsyncRelayCommand(_ => LoadIndicesAsync(busy: false, silent: false));
     }
 
     public override Task ReloadAsync() => LoadIndicesAsync(busy: true, silent: false);
@@ -145,20 +149,17 @@ public class SearchViewModel : PageViewModelBase
         IsLoading = true;
         try
         {
-            string json = await Client.GetIndicesAsync("/_cat/indices?format=json&h=index");
-            var names = new List<string>();
-            using var doc = JsonDocument.Parse(json);
-            foreach (var el in doc.RootElement.EnumerateArray())
-            {
-                var name = JsonHelper.GetString(el, "index");
-                if (!string.IsNullOrEmpty(name)) names.Add(name);
-            }
+            string json = await Client.GetIndicesAsync(EsClient.IndexNamesFormat);
+            var names = EsParsers.ParseIndexNames(json);
             Indices.ReplaceAll(names.OrderBy(x => x, StringComparer.Ordinal));
 
             if (string.IsNullOrEmpty(SelectedIndex) && Indices.Count > 0)
                 SelectedIndex = Indices[0];
 
-            IndexHint = $"{Indices.Count}";
+            // 0 个索引也要说清楚：是集群里真的没有索引，而不是"没加载出来"
+            IndexHint = Indices.Count > 0
+                ? Localization.L("search.index.count", Indices.Count)
+                : Localization.L("search.index.empty");
         }
         catch (Exception ex)
         {

@@ -1211,6 +1211,212 @@ Test("解析: 快照 start_time 为 0 / 非法值时不抛异常", () =>
 });
 
 // ============================================================
+// 第 4 轮：搜索页索引下拉 + 五个列表（仓库/快照/恢复/SLM/ILM）
+// ============================================================
+
+Test("解析: 索引名列表（搜索页索引下拉的数据源）", () =>
+{
+    var names = EsParsers.ParseIndexNames("""[{"index":"logs-0002"},{"index":"logs-0001"},{"other":"x"}]""");
+    Eq(2, names.Count, "只取带 index 字段的行");
+    Eq("logs-0002", names[0], "保持响应顺序（排序由调用方决定）");
+    Eq("logs-0001", names[1], "第二项");
+
+    Eq(0, EsParsers.ParseIndexNames("[]").Count, "空数组");
+    Eq(0, EsParsers.ParseIndexNames("""{"error":"no such index"}""").Count,
+        "错误响应（对象）返回空而不是抛异常——失败原因由调用方展示");
+});
+
+Test("快照: SLM / ILM / 恢复进度 端点契约", () =>
+{
+    var (m1, uri1, _) = Capture(c => c.GetSlmPoliciesAsync().GetAwaiter().GetResult());
+    Eq("GET", m1, "slm list method");
+    True(uri1.EndsWith("/_slm/policy"), $"slm list path => {uri1}");
+
+    var (m2, uri2, body2) = Capture(c => c.CreateSlmPolicyAsync(
+        "daily/snap", """{"schedule":"0 30 1 * * ?","repository":"backup"}""").GetAwaiter().GetResult());
+    Eq("PUT", m2, "slm create method");
+    Contains(uri2, "/_slm/policy/daily%2Fsnap", "策略 ID 已转义");
+    Contains(body2!, "schedule", "body 原样透传");
+
+    var (m3, uri3, _) = Capture(c => c.ExecuteSlmPolicyAsync("p1").GetAwaiter().GetResult());
+    Eq("POST", m3, "slm execute method");
+    True(uri3.EndsWith("/_slm/policy/p1/_execute"), $"slm execute path => {uri3}");
+
+    var (m4, uri4, _) = Capture(c => c.DeleteSlmPolicyAsync("p1").GetAwaiter().GetResult());
+    Eq("DELETE", m4, "slm delete method");
+    True(uri4.EndsWith("/_slm/policy/p1"), $"slm delete path => {uri4}");
+
+    var (m5, uri5, _) = Capture(c => c.GetIlmPoliciesAsync().GetAwaiter().GetResult());
+    Eq("GET", m5, "ilm list method");
+    True(uri5.EndsWith("/_ilm/policy"), $"ilm list path => {uri5}");
+
+    var (m6, uri6, _) = Capture(c => c.CreateIlmPolicyAsync("p 1", """{"policy":{"phases":{}}}""").GetAwaiter().GetResult());
+    Eq("PUT", m6, "ilm create method");
+    Contains(uri6, "/_ilm/policy/p%201", "策略 ID 已转义");
+
+    var (m7, uri7, _) = Capture(c => c.DeleteIlmPolicyAsync("p1").GetAwaiter().GetResult());
+    Eq("DELETE", m7, "ilm delete method");
+    True(uri7.EndsWith("/_ilm/policy/p1"), $"ilm delete path => {uri7}");
+
+    var (m8, uri8, _) = Capture(c => c.GetRecoveryStatusAsync().GetAwaiter().GetResult());
+    Eq("GET", m8, "recovery method");
+    Contains(uri8, "/_recovery?", "recovery path");
+    Contains(uri8, "active_only=true", "只看进行中的恢复");
+
+    var (m9, uri9, _) = Capture(c => c.GetSnapshotDetailAsync("backup", "snap-1").GetAwaiter().GetResult());
+    Eq("GET", m9, "snapshot detail method");
+    True(uri9.EndsWith("/_snapshot/backup/snap-1"), $"detail path => {uri9}");
+
+    foreach (var u in new[] { uri1, uri2, uri3, uri4, uri5, uri6, uri7, uri8, uri9 })
+        NoDoubleSlash(u, "snapshot extra");
+});
+
+Test("快照: 恢复支持重命名（避免覆盖线上同名索引）", () =>
+{
+    var (_, _, body) = Capture(c => c.RestoreSnapshotAsync(
+        "backup", "snap-1", "a", false, "index_(.+)", "restored_$1").GetAwaiter().GetResult());
+
+    // 注意：JsonObject.ToJsonString() 用的是默认编码器，会把 "+" 写成 "\u002B"、
+    // "<" 写成 "\u003C"。这在 JSON 里是等价的转义，ES 解析后拿到的是原字符，
+    // 所以这里按"反序列化后的值"断言，而不是按字面量比对原始报文。
+    using (var doc = JsonDocument.Parse(body!))
+    {
+        var root = doc.RootElement;
+        Eq("index_(.+)", root.GetProperty("rename_pattern").GetString()!, "重命名正则原样送达");
+        Eq("restored_$1", root.GetProperty("rename_replacement").GetString()!, "替换串原样送达");
+    }
+
+    var (_, _, plain) = Capture(c => c.RestoreSnapshotAsync("backup", "snap-1").GetAwaiter().GetResult());
+    False(plain!.Contains("rename_pattern"),
+        "没填就不要带字段：空字符串会被 ES 当成非法正则，恢复整单失败");
+    Contains(plain, "\"ignore_unavailable\":true", "默认忽略不存在的索引");
+    Contains(plain, "\"indices\":\"*\"", "未指定索引时视为全部");
+});
+
+Test("解析: SLM 策略（调度/仓库/保留/时间，兼容 7.x 对象与 8.x 字符串）", () =>
+{
+    const string json = """
+        {
+          "daily": {
+            "policy": {
+              "name": "<daily-{now/d}>", "schedule": "0 30 1 * * ?", "repository": "backup",
+              "config": { "indices": ["logs-*", "metrics-*"], "include_global_state": false },
+              "retention": { "expire_after": "30d", "min_count": 5, "max_count": 50 }
+            },
+            "next_execution_millis": 1700000000000,
+            "last_success": { "snapshot_name": "daily-2024.01.01", "time": 1699999999000 },
+            "last_failure": null,
+            "stats": { "snapshots_taken": 12, "snapshots_failed": 1, "snapshots_deleted": 2 }
+          },
+          "hourly": {
+            "policy": { "schedule": "0 0 * * * ?", "repository": "backup2" },
+            "next_execution": "2024-01-02T03:04:05.000Z",
+            "last_success": "2024-01-01T00:00:00.000Z"
+          }
+        }
+        """;
+    var list = EsParsers.ParseSlmPolicies(json);
+    Eq(2, list.Count, "policy count");
+    Eq("daily", list[0].PolicyId, "按策略 ID 排序");
+
+    var daily = list[0];
+    Eq("<daily-{now/d}>", daily.SnapshotNameTemplate, "快照名模板");
+    Eq("0 30 1 * * ?", daily.Schedule, "调度");
+    Eq("backup", daily.Repository, "仓库");
+    Eq("logs-*, metrics-*", daily.Indices, "索引列表拼接");
+    Contains(daily.RetentionText, "30d", "过期时间");
+    Contains(daily.RetentionText, "5", "最少保留数");
+    Contains(daily.RetentionText, "50", "最多保留数");
+    True(!string.IsNullOrEmpty(daily.NextExecution), "下次执行时间已格式化");
+    Contains(daily.LastSuccess, "daily-2024.01.01", "最近成功的快照名");
+    Eq("", daily.LastFailure, "last_failure 为 null → 空串");
+    False(daily.HasFailure, "没有失败");
+    Contains(daily.StatsText, "12", "统计：已执行次数");
+    Contains(daily.StatsText, "1", "统计：失败次数");
+    Contains(daily.PolicyJson, "schedule", "策略原文保留（详情展示用）");
+
+    var hourly = list[1];
+    True(!string.IsNullOrEmpty(hourly.NextExecution), "8.x 的 ISO 字符串形态也要能显示");
+    False(hourly.NextExecution.Contains('T'), "ISO 时间已转成本地时间格式");
+    True(!string.IsNullOrEmpty(hourly.LastSuccess), "字符串形态的 last_success");
+    Eq("", hourly.RetentionText, "没有 retention → 空串（不是 null）");
+    Eq("", hourly.Indices, "没有 config → 空串");
+    Eq(0, EsParsers.ParseSlmPolicies("{}").Count, "空对象");
+});
+
+Test("解析: ILM 生命周期策略（阶段链/使用中索引/修改时间）", () =>
+{
+    const string json = """
+        {
+          "logs": {
+            "version": 3,
+            "modified_date": "2024-01-02T03:04:05.000Z",
+            "policy": { "phases": {
+              "hot": { "actions": {} },
+              "warm": { "actions": {} },
+              "delete": { "min_age": "30d", "actions": { "delete": {} } } } },
+            "in_use_by": { "indices": ["logs-0001", "logs-0002"], "data_streams": [], "composable_templates": [] }
+          },
+          "empty": { "version": 1, "policy": { "phases": {} } }
+        }
+        """;
+    var list = EsParsers.ParseIlmPolicies(json);
+    Eq(2, list.Count, "policy count");
+    Eq("empty", list[0].PolicyId, "按策略 ID 排序");
+
+    var logs = list[1];
+    Eq(3, logs.PhaseCount, "阶段数");
+    Eq("hot → warm → delete", logs.PhasesText, "阶段链（保持 ES 返回顺序）");
+    Eq(2, logs.IndicesInUseCount, "使用中索引数");
+    Eq("logs-0001, logs-0002", logs.IndicesInUse, "使用中索引拼接");
+    True(!string.IsNullOrEmpty(logs.ModifiedDate), "修改时间已格式化");
+    Contains(logs.PolicyJson, "phases", "策略原文保留");
+
+    Eq(0, list[0].PhaseCount, "空 phases → 0 个阶段");
+    Eq("", list[0].PhasesText, "空 phases → 空阶段链");
+    Eq(0, list[0].IndicesInUseCount, "没有 in_use_by → 0");
+    Eq(0, EsParsers.ParseIlmPolicies("{}").Count, "空对象");
+});
+
+Test("解析: 恢复进度（分片级别，DONE 判定与进度显示）", () =>
+{
+    const string json = """
+        {
+          "restored-1": {
+            "shards": [
+              { "id": 0, "type": "SNAPSHOT", "stage": "DONE", "total_time_in_millis": 1500,
+                "source": { "host": "10.0.0.1", "name": "node-1" },
+                "target": { "host": "10.0.0.2", "name": "node-2" },
+                "index": { "size": { "total_in_bytes": 2097152, "recovered_in_bytes": 2097152 },
+                           "files": { "total": 4, "recovered": 4, "percent": "100.0%" } } },
+              { "id": 1, "type": "SNAPSHOT", "stage": "INDEX", "total_time_in_millis": 0,
+                "index": { "files": { "recovered": 2, "percent": "42.5%" } } }
+            ]
+          }
+        }
+        """;
+    var rows = EsParsers.ParseRecovery(json);
+    Eq(2, rows.Count, "每个分片一行");
+    Eq("restored-1", rows[0].Index, "索引名");
+    Eq("0", rows[0].Shard, "分片号");
+    Eq("SNAPSHOT", rows[0].Type, "恢复类型");
+    Eq("DONE", rows[0].Stage, "阶段");
+    Eq("100.0%", rows[0].FilesPercent, "文件百分比");
+    Eq("10.0.0.1", rows[0].Source, "来源节点");
+    Eq("10.0.0.2", rows[0].Target, "目标节点");
+    True(!string.IsNullOrEmpty(rows[0].BytesText), "字节进度");
+    True(!string.IsNullOrEmpty(rows[0].TimeText), "耗时");
+    True(rows[0].IsDone, "DONE 判定完成");
+
+    False(rows[1].IsDone, "INDEX 阶段未完成");
+    Eq("42.5%", rows[1].FilesPercent, "进行中的百分比");
+    Eq("", rows[1].BytesText, "缺 size → 空串而不是抛异常");
+    Eq("", rows[1].Source, "缺 source → 空串");
+    Eq(0, EsParsers.ParseRecovery("{}").Count, "空对象");
+    Eq(0, EsParsers.ParseRecovery("""{"idx":{"no_shards":true}}""").Count, "没有 shards 字段");
+});
+
+// ============================================================
 // 图标：矢量路径语法与视图框校验（Linux 可跑）
 //
 // 为什么放在这里：图标数据在 Core（纯字符串），WPF 侧用 Geometry.Parse 渲染。
