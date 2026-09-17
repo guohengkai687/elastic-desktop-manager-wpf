@@ -37,7 +37,7 @@ public static class Localization
     {
         ["app.title"] = "Elastic Desktop Manager",
         ["app.subtitle"] = "强大的 Elasticsearch 可视化查询管理工具",
-        ["app.author"] = "lxwise",
+        ["app.author"] = "guohengkai",
 
         // 导航
         ["nav.group.overview"] = "概览",
@@ -333,7 +333,7 @@ public static class Localization
         ["about.title"] = "关于",
         ["about.version"] = "版本：{0}",
         ["about.author"] = "作者：{0}",
-        ["about.desc"] = "基于 WPF (.NET 8) 的 Elasticsearch 桌面管理客户端，移植自 JavaFX 开源项目 elastic-desktop-manager，支持 SSL 与“跳过 SSL 验证”。",
+        ["about.desc"] = "基于 WPF (.NET 8) 的 Elasticsearch 桌面管理客户端，移植自 lxwise 的 JavaFX 开源项目 elastic-desktop-manager（Apache-2.0），支持 SSL 与“跳过 SSL 验证”。",
         ["about.github"] = "GitHub",
         ["about.tech"] = "技术栈：WPF / .NET 8 / HttpClient / System.Text.Json",
 
@@ -552,7 +552,7 @@ public static class Localization
     {
         ["app.title"] = "Elastic Desktop Manager",
         ["app.subtitle"] = "A powerful Elasticsearch visualization & management tool",
-        ["app.author"] = "lxwise",
+        ["app.author"] = "guohengkai",
 
         ["nav.group.overview"] = "Overview",
         ["nav.group.cluster"] = "Cluster",
@@ -837,7 +837,7 @@ public static class Localization
         ["about.title"] = "About",
         ["about.version"] = "Version: {0}",
         ["about.author"] = "Author: {0}",
-        ["about.desc"] = "An Elasticsearch desktop client built with WPF (.NET 8), ported from the JavaFX open-source project elastic-desktop-manager, with SSL support and \"skip SSL verification\".",
+        ["about.desc"] = "An Elasticsearch desktop client built with WPF (.NET 8), ported from lxwise's JavaFX open-source project elastic-desktop-manager (Apache-2.0), with SSL support and \"skip SSL verification\".",
         ["about.github"] = "GitHub",
         ["about.tech"] = "Stack: WPF / .NET 8 / HttpClient / System.Text.Json",
 

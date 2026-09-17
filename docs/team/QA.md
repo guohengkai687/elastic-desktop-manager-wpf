@@ -6,7 +6,7 @@
 ## 执行汇总
 
 > 下表是**第 3 轮（ES-King 借鉴改造）当时的快照**，保留不变。**最新数字见各轮小节**：
-> 第 4-6 轮见下文，第 7 轮为 `build 0/0 · 单测 105/105 · 守卫 29/29`。
+> 第 4-6 轮见下文，第 7 轮为 `build 0/0 · 单测 105/105 · 守卫 29/29`，第 8 轮为 `build 0/0 · 单测 106/106 · 守卫 31/31`。
 
 | 命令 | 结果 |
 |---|---|
@@ -425,3 +425,45 @@ REST / SQL / 空态视图在 code-behind 里赋了本地化文案，却没订阅
 35. **主窗口提示**：右上角三个图标按钮（主题/设置/关于）的悬停提示应随语言切换。
 36. **表头不应为空**：本轮把 33 处写死的表头改成"由 code-behind 赋值"，
     请确认索引/节点/分片/REST 历史窗的表头**都有字**（若出现空表头，说明 `Localized` 没跑到或列数对不上）。
+
+## 第 8 轮（署名与仓库链接：关于窗口把用户带到别人的项目）
+
+### 用户需求
+
+"修改作者 lxwise 改为 guohengkai，对应的 github 的 url 也要做修正"。
+
+### 问题与根因
+
+上游 JavaFX 原版的 `AboutMeController` 里作者名是 `lxwise`、GitHub 按钮指向 `github.com/lxwise`。
+移植时 code-behind 抄了结构，把这两个**值**也一起抄了过来 → 本移植版的「关于」窗口自称作者是 lxwise、
+按钮打开的是上游仓库，移植版看起来像原版。
+这类"值是别人家的"缺陷，编译不报错，单测与既有 29 项守卫（只看绑定契约/资源/文案**来源**）也全都抓不到。
+
+### 实现清单
+
+| 层 | 改动 |
+|---|---|
+| 词条 | `app.author` 中英均改为 `guohengkai`（`about.author` 是带 `{0}` 的模板，本身无需改） |
+| 关于窗口 | `AboutWindow.xaml.cs` 新增 `RepoUrl` 常量 → `https://github.com/guohengkai687/elastic-desktop-manager-wpf`，`OnGithub` 改用它（不再有散落的 URL 字面量） |
+| 署名保留 | 上游是 **Apache-2.0**：`about.desc` 中英均补"移植自 lxwise 的 … （Apache-2.0）"；README 顶部与「许可」小节点明 lxwise 是**上游作者**、本仓库作者是 guohengkai —— 署名是许可要求，不随作者改名一起删 |
+| 新守卫 | 「`src/**/*.cs` 里的 GitHub 仓库链接必须指向本仓库」+ 1 条自检（只扫 `src/`，README/docs 的上游署名链接不在范围内） |
+
+### 本轮验证
+
+- 构建：**0 警告 0 错误**；Core 单测：**105 → 106/106**（新增 1 条：关于窗口署名串在 zh/en 下分别为「作者：guohengkai」/「Author: guohengkai」，并断言 `about.desc` 仍含 `lxwise` 与 `Apache-2.0`）；静态守卫：**29 → 31/31**（1 条新规则 + 1 条自检，自检总数 10 → 12）
+- **负向验证 2 条**（改坏 → 确认只有预期那一条失败且信息精准 → 还原 → 复跑全绿）：
+  ① 把 `RepoUrl` 注入成 `github.com/lxwise/elastic-desktop-manager` → 守卫精确报
+  `代码：GitHub 仓库链接必须指向本仓库 … AboutWindow.xaml.cs: github.com/lxwise/elastic-desktop-manager`，
+  结果 `通过 30，失败 1`；
+  ② 把 `app.author` 注入回 `lxwise` → 单测精确报 `zh author: expected <作者：guohengkai> but got <作者：lxwise>`，
+  结果 `通过 105，失败 1`
+- 新规则的自检覆盖 5 个方向：指向上游仓库 → 抓出；本仓库（含 `.git` 后缀）→ 放行；
+  `advisories` 保留路径 → 放行；只到用户主页（无仓库名）→ 放行；
+  把 `own` 换成别的值后同一 URL 必须报错（反证比较真的在生效，不是恒过）
+
+### 追加到 Windows 人工核对清单
+
+37. **关于窗口（本轮）**：主窗口右上角「关于」→ 作者一行应显示 **`作者：guohengkai`**
+    （英文界面 `Author: guohengkai`），说明文字里仍应看到"移植自 lxwise 的 …（Apache-2.0）"；
+    点 **GitHub** 按钮，浏览器应打开 `https://github.com/guohengkai687/elastic-desktop-manager-wpf`
+    （**修复前打开的是 lxwise 的仓库**）。

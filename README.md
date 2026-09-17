@@ -1,8 +1,10 @@
 # Elastic Desktop Manager (WPF 版)
 
-基于 **WPF (.NET 8)** 的 Elasticsearch 桌面查询管理客户端，由开源项目
-[elastic-desktop-manager](https://github.com/lxwise/elastic-desktop-manager)（JavaFX 实现）移植而来。
+基于 **WPF (.NET 8)** 的 Elasticsearch 桌面查询管理客户端，由 **lxwise** 的开源项目
+[elastic-desktop-manager](https://github.com/lxwise/elastic-desktop-manager)（JavaFX 实现，Apache-2.0 许可）移植而来。
 功能面与源项目对齐，并**新增 SSL 支持与“跳过 SSL 验证”**能力。
+
+> 本仓库（WPF 移植版）的作者是 **guohengkai**；`lxwise` 是上游 JavaFX 原版的作者，此处保留署名与链接以符合 Apache-2.0 的署名要求。
 
 > 目标环境：Windows 10/11（WPF 仅支持 Windows）。源码可在 Linux 上完成编译验证（`EnableWindowsTargeting`）。
 
@@ -121,7 +123,7 @@ elastic-desktop-manager-wpf/
 │   ├── Mvvm/        ObservableObject / RelayCommand / AsyncRelayCommand
 │   └── Services/    ThemeService / Ui / SystemTheme
 └── tests/ElasticDesktopManager.Tests/  net8.0 控制台断言测试（Linux 可直接运行）
-    tests/binding-guard/               XAML 绑定契约 + 资源 key + 令牌类型 + 派生属性通知 + 控件模板契约 + i18n 静态守卫（29 项，Linux 可跑）
+    tests/binding-guard/               XAML 绑定契约 + 资源 key + 令牌类型 + 派生属性通知 + 控件模板契约 + i18n 静态守卫（31 项，Linux 可跑）
 ```
 
 ## 构建与运行
@@ -139,7 +141,7 @@ dotnet build ElasticDesktopManager.sln
 # 运行单元测试（Core 逻辑，Linux 可执行）
 dotnet run --project tests/ElasticDesktopManager.Tests -c Release
 
-# XAML 绑定契约 + 资源 key + 令牌类型 + 派生属性通知 + 控件模板契约 + i18n 静态守卫（29 项，含可失败自检）
+# XAML 绑定契约 + 资源 key + 令牌类型 + 派生属性通知 + 控件模板契约 + i18n 静态守卫（31 项，含可失败自检）
 # 覆盖：只读属性绑到默认 TwoWay 目标 / Dark·Light 主题 key 不对称 / 硬编码颜色 /
 #      引用了不存在的资源 key（DynamicResource + StaticResource）/ 资源引用嵌在字符串中 /
 #      设计令牌类型与目标属性不匹配（如 Double 用于 GridLength/Thickness，会启动即崩）/
@@ -150,6 +152,7 @@ dotnet run --project tests/ElasticDesktopManager.Tests -c Release
 #      页面视图在 code-behind 里本地化却没订阅语言切换（切语言整页停在旧语言）/
 #      订阅了语言切换却没让 VM 重算"共 N 条"这类缓存文案（标题切了、统计还是旧语言）/
 #      XAML 里写死 Header/ToolTip 文案（两个来源早晚对不上）/ 形参收 key 却传了 L() 的译文（双重翻译）
+#      代码里的 GitHub 仓库链接指向别人的项目（关于窗口把用户带到上游仓库，不是本仓库）
 dotnet run --project tests/binding-guard -c Release
 
 # 运行应用（Windows）
@@ -178,3 +181,6 @@ dotnet run --project src/ElasticDesktopManager
 ## 许可
 
 [MIT](LICENSE) © 2026 Hengkai.Guo
+
+本仓库是 [lxwise/elastic-desktop-manager](https://github.com/lxwise/elastic-desktop-manager)（Apache-2.0 许可）的 WPF 移植版，
+保留上游项目的版权与署名；移植与改造点见上文「与 JavaFX 原版的差异」。

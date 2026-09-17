@@ -487,6 +487,20 @@ Test("i18n: validate.required 格式化", () =>
     Localization.SetLanguage("zh_CN");
 });
 
+Test("i18n: 关于窗口署名——作者是本仓库作者，上游署名仍保留", () =>
+{
+    // 第 8 轮：关于窗口的作者字段沿用了上游 JavaFX 原版的值（lxwise），
+    // 且 GitHub 按钮指向的是上游仓库。作者字段由 app.author 词条决定，这里钉死它。
+    Localization.SetLanguage("zh_CN");
+    Eq("作者：guohengkai", Localization.L("about.author", Localization.L("app.author")), "zh author");
+    Localization.SetLanguage("en");
+    Eq("Author: guohengkai", Localization.L("about.author", Localization.L("app.author")), "en author");
+    // 反面：不能把上游署名一起删掉（上游为 Apache-2.0，署名是许可要求）
+    True(Localization.L("about.desc").Contains("lxwise", StringComparison.Ordinal), "upstream credit kept");
+    True(Localization.L("about.desc").Contains("Apache-2.0", StringComparison.Ordinal), "upstream license kept");
+    Localization.SetLanguage("zh_CN");
+});
+
 Test("BaseUrl: 含协议前缀的服务器地址展示不重复协议（P2-9 回归）", () =>
 {
     var cfg = new ConfigProperty { Servers = "https://es.example.com:9200", Scheme = "http" };

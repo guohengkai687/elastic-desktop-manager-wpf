@@ -1653,6 +1653,78 @@ Check("守卫自检：未定义的 i18n key / 缺失的 PART_EditableTextBox / �
         throw new Exception("误报：占位符顺序不同不应算不一致");
 });
 
+// ---- 规则：代码里的 GitHub 仓库链接必须指向本仓库 ----
+//
+// 第 8 轮发现：关于窗口的「GitHub」按钮打开的是**上游项目**（lxwise/elastic-desktop-manager）——
+// 移植时从 JavaFX 原版抄了链接却没改，用户点开看到的是别人的仓库。
+// 这类"值本身就是别人家的 URL"编译期不报错、单测与其它守卫也抓不到（它们只看结构与文案来源），
+// 只能静态比对字符串。只扫 src/ 下的 .cs —— README / docs 里的上游署名链接是**许可要求**
+// （上游为 Apache-2.0），必须保留，不在本规则范围内。
+static List<string> ForeignGithubRepoUrls(string code, string label, string ownOwnerRepo)
+{
+    // GitHub 的保留一级路径（不是用户/组织名），命中即跳过
+    string[] reserved =
+    {
+        "advisories", "orgs", "apps", "marketplace", "sponsors", "topics",
+        "collections", "settings", "login", "features", "about", "pricing",
+        "security", "site", "explore", "notifications",
+    };
+    var found = new List<string>();
+    foreach (Match m in Regex.Matches(code, @"https?://github\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)"))
+    {
+        string owner = m.Groups[1].Value;
+        string repo = m.Groups[2].Value;
+        if (Array.Exists(reserved, r => r.Equals(owner, StringComparison.OrdinalIgnoreCase))) continue;
+        if (repo.EndsWith(".git", StringComparison.OrdinalIgnoreCase)) repo = repo[..^4];
+        if ($"{owner}/{repo}".Equals(ownOwnerRepo, StringComparison.OrdinalIgnoreCase)) continue;
+        found.Add($"{label}: github.com/{owner}/{repo}");
+    }
+    return found;
+}
+
+Check("代码：GitHub 仓库链接必须指向本仓库（否则用户点开是别人的项目）", () =>
+{
+    const string own = "guohengkai687/elastic-desktop-manager-wpf";
+    string srcDir = Path.Combine(repoRoot, "src");
+    var problems = new List<string>();
+    int scanned = 0;
+    foreach (var cs in Directory.GetFiles(srcDir, "*.cs", SearchOption.AllDirectories))
+    {
+        if (cs.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
+            || cs.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}")) continue;
+        scanned++;
+        problems.AddRange(ForeignGithubRepoUrls(File.ReadAllText(cs), Path.GetFileName(cs), own));
+    }
+
+    if (scanned == 0)
+        throw new Exception("没有扫描到任何 .cs —— 本规则失去保护对象，请更新规则");
+    if (problems.Count > 0)
+        throw new Exception($"发现 {problems.Count} 处指向其它仓库的 GitHub 链接：\n    "
+            + string.Join("\n    ", problems));
+});
+
+Check("守卫自检：指向别人仓库的链接必须能被抓出（本仓库与保留路径不误报）", () =>
+{
+    const string own = "guohengkai687/elastic-desktop-manager-wpf";
+    // ① 正是第 8 轮的真实缺陷
+    if (ForeignGithubRepoUrls("""var u = "https://github.com/lxwise/elastic-desktop-manager";""", "t", own).Count != 1)
+        throw new Exception("未抓出指向上游仓库的链接（关于窗口打开别人项目的那类缺陷）");
+    // ② 本仓库自己的链接必须放行（含 .git 后缀写法）
+    if (ForeignGithubRepoUrls($"""var u = "https://github.com/{own}";""", "t", own).Count != 0)
+        throw new Exception("误报：指向本仓库的链接不该算问题");
+    if (ForeignGithubRepoUrls($"""var u = "https://github.com/{own}.git";""", "t", own).Count != 0)
+        throw new Exception("误报：带 .git 后缀的本仓库链接不该算问题");
+    // ③ 非仓库型链接（安全公告）不算
+    if (ForeignGithubRepoUrls("""// https://github.com/advisories/GHSA-c6w8-7mp3-34j9""", "t", own).Count != 0)
+        throw new Exception("误报：advisories 是保留路径，不是仓库链接");
+    // ④ 只到用户/组织、没有仓库名的链接不算（正则要求两段路径）
+    if (ForeignGithubRepoUrls("""var u = "https://github.com/lxwise";""", "t", own).Count != 0)
+        throw new Exception("误报：只到用户主页的链接不是仓库链接");
+    // ⑤ 反证：把 own 换成别的值时同一个 URL 必须报错（证明比较真的在生效，不是恒过）
+    if (ForeignGithubRepoUrls($"""var u = "https://github.com/{own}";""", "t", "someone/other").Count != 1)
+        throw new Exception("自检样本构造失败：own 不匹配时必须报错，否则本规则恒过");
+});
+
 Console.WriteLine();
 Console.WriteLine($"===== 结果：通过 {passed}，失败 {failed} =====");
 if (failed > 0)

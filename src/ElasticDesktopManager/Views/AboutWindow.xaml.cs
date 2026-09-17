@@ -7,6 +7,9 @@ namespace ElasticDesktopManager.Views;
 
 public partial class AboutWindow : Window
 {
+    /// <summary>本项目仓库地址（「GitHub」按钮打开的目标）。</summary>
+    private const string RepoUrl = "https://github.com/guohengkai687/elastic-desktop-manager-wpf";
+
     public AboutWindow()
     {
         InitializeComponent();
@@ -26,7 +29,7 @@ public partial class AboutWindow : Window
     {
         try
         {
-            Process.Start(new ProcessStartInfo("https://github.com/lxwise/elastic-desktop-manager")
+            Process.Start(new ProcessStartInfo(RepoUrl)
             {
                 UseShellExecute = true,
             });

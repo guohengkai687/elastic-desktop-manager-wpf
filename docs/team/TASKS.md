@@ -280,3 +280,20 @@ XAML 里的英文只是被覆盖的占位（性质是"两处来源"，不是"界
       新增一个加载时拼好的 VM 文案必须人工记得写进 `OnRelocalize()`（已记入 ADR-14 的纪律条款）。
 - [ ] 解析时格式化的 ES 文本（保留/统计/分片，缓存在模型上）仍需下次刷新才更新（ADR-10 的既有代价）。
 - [ ] 深分页、ILM/SLM 调度器状态、非 fs 仓库设置表单：同第 6 轮，未做。
+
+---
+
+## 第 8 轮：署名与仓库链接修正（作者 lxwise → guohengkai）
+
+- [x] `app.author`（zh/en）→ `guohengkai`；`AboutWindow.xaml.cs` 新增 `RepoUrl` 常量指向本仓库并替换原版链接
+- [x] 保留上游署名：`about.desc` 中英补"移植自 lxwise 的 …（Apache-2.0）"；README 顶部与「许可」小节点明上游作者与本仓库作者的区别
+- [x] 新守卫「`src/**/*.cs` 里的 GitHub 仓库链接必须指向本仓库」+ 自检 → 守卫 **29 → 31 项**（自检 10 → 12）
+- [x] Core 新增 1 条单测（第 106 条）：`about.author` 组合出的署名串 zh/en 分别为「作者：guohengkai」/「Author: guohengkai」，并断言 `about.desc` 仍含 `lxwise` 与 `Apache-2.0`
+- [x] 构建 0/0、单测 **105 → 106/106**、守卫 31/31；**负向验证 2 条**（注入上游 URL → 守卫只报该条；把 `app.author` 注入回 `lxwise` → 单测只报该条；均还原复跑全绿）
+- [x] 文档更新（本文件 / QA 第 8 轮 + 核对清单 37 / REVIEW 第 8 轮 / ARCHITECTURE 守卫表 / README 计数与覆盖说明）
+
+### 未做（如实声明）
+
+- [ ] 真机复验（关于窗口的作者行文字与按钮跳转）需用户在 Windows 上做：**QA 第 37 条**。
+- [ ] 上游 Apache-2.0 的许可证副本是否随仓库分发（如加 `LICENSE-APACHE`）**未擅自添加** —— 属项目许可文书，需用户决定。
+- [ ] 归档审查记录 `docs/team/archive/REVIEW-v1-port.md` 里的 `com/lxwise/elastic/...` 是**上游源码路径**，属历史事实，保留不动。
